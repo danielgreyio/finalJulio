@@ -1,7 +1,6 @@
 <?php
-session_start();
 require_once 'config/database.php';
-require_once 'includes/security.php';
+require_once 'includes/Mailer.php';
 
 // Check if user is logged in
 if (!isLoggedIn()) {
@@ -47,6 +46,14 @@ $orderItems = $stmt->fetchAll();
 
 // Generate order confirmation number
 $confirmationNumber = 'VD-' . str_pad($orderId, 6, '0', STR_PAD_LEFT) . '-' . date('Y', strtotime($order['created_at']));
+
+// Send confirmation email once per order (session guard prevents duplicate sends on refresh)
+$emailKey = 'order_confirm_sent_' . $orderId;
+if (empty($_SESSION[$emailKey])) {
+    $mailer = new Mailer();
+    $mailer->sendOrderConfirmation($order['customer_email'], $order['customer_email'], $order);
+    $_SESSION[$emailKey] = true;
+}
 ?>
 
 <!DOCTYPE html>

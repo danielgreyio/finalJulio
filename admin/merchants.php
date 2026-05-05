@@ -1,24 +1,42 @@
 <?php
 require_once '../config/database.php';
+require_once '../includes/Mailer.php';
 
 // Require admin login
 requireRole('admin');
 
 // Handle merchant actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+    requireCSRF();
+
+    $action     = $_POST['action'] ?? '';
     $merchantId = intval($_POST['merchant_id'] ?? 0);
-    
-    if ($action === 'approve' && $merchantId > 0) {
-        // For demo purposes, we'll just update a status field or send notification
-        // In real app, you might have a merchant_status table
-        $success = "Merchant approved successfully! (Demo: Email notification would be sent)";
-    } elseif ($action === 'reject' && $merchantId > 0) {
-        $reason = $_POST['rejection_reason'] ?? 'Application does not meet requirements';
-        $success = "Merchant rejected. Reason: " . htmlspecialchars($reason) . " (Demo: Email notification would be sent)";
-    } elseif ($action === 'suspend' && $merchantId > 0) {
-        // In real app, you might disable their products or account
-        $success = "Merchant suspended successfully! (Demo: Account would be disabled)";
+
+    if ($merchantId > 0) {
+        $stmt = $pdo->prepare("SELECT email, username FROM users WHERE id = ? AND role = 'merchant'");
+        $stmt->execute([$merchantId]);
+        $merchant = $stmt->fetch();
+    }
+
+    if (!empty($merchant)) {
+        $mailer = new Mailer();
+
+        if ($action === 'approve') {
+            $pdo->prepare("UPDATE users SET status = 'active' WHERE id = ?")->execute([$merchantId]);
+            $mailer->sendMerchantStatusUpdate($merchant['email'], $merchant['username'], 'approved');
+            $success = "Merchant approved and notified by email.";
+
+        } elseif ($action === 'reject') {
+            $reason = $_POST['rejection_reason'] ?? 'Application does not meet our requirements.';
+            $pdo->prepare("UPDATE users SET status = 'inactive' WHERE id = ?")->execute([$merchantId]);
+            $mailer->sendMerchantStatusUpdate($merchant['email'], $merchant['username'], 'rejected', $reason);
+            $success = "Merchant rejected and notified by email.";
+
+        } elseif ($action === 'suspend') {
+            $pdo->prepare("UPDATE users SET status = 'suspended' WHERE id = ?")->execute([$merchantId]);
+            $mailer->sendMerchantStatusUpdate($merchant['email'], $merchant['username'], 'suspended');
+            $success = "Merchant suspended and notified by email.";
+        }
     }
 }
 

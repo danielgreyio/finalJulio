@@ -1,8 +1,6 @@
 <?php
 require_once 'config/database.php';
-require_once 'includes/security.php';
-// Temporarily comment out 2FA until tables are set up
-// require_once 'includes/TwoFactorAuth.php';
+require_once 'includes/TwoFactorAuth.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -12,8 +10,7 @@ if (isLoggedIn()) {
 
 $error = '';
 $redirect = Security::sanitizeInput($_GET['redirect'] ?? 'index.php', 'string');
-// Temporarily comment out 2FA initialization
-// $twoFA = new TwoFactorAuth($pdo);
+$twoFA = new TwoFactorAuth($pdo);
 $show2FAForm = false;
 $pendingUserId = null;
 
@@ -24,11 +21,11 @@ if (isset($_SESSION['pending_2fa_user_id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF Protection temporarily disabled
-    // if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
-    //     Security::logSecurityEvent('csrf_token_mismatch', ['page' => 'login']);
-    //     die('CSRF token mismatch');
-    // }
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        Security::logSecurityEvent('csrf_token_mismatch', ['page' => 'login']);
+        http_response_code(403);
+        die('Invalid request. Please go back and try again.');
+    }
     
     // Check if this is 2FA verification
     if (isset($_POST['verify_2fa']) && $pendingUserId) {
@@ -123,33 +120,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = $stmt->fetch();
                 
                 if ($user && Security::verifyPassword($password, $user['password'])) {
-                    // Temporarily disable 2FA check until tables are set up
-                    /*
                     // Check if 2FA is enabled
                     if ($twoFA->isEnabled($user['id'])) {
                         // Check if device is trusted
                         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
                         $ipAddress = Security::getClientIP();
-                        
+
                         if ($twoFA->isTrustedDevice($user['id'], $userAgent, $ipAddress)) {
                             // Skip 2FA for trusted device
                             $_SESSION['user_id'] = $user['id'];
                             $_SESSION['user_email'] = $user['email'];
                             $_SESSION['user_role'] = $user['role'];
-                            
+
                             session_regenerate_id(true);
-                            
+
                             Security::logSecurityEvent('user_login_success_trusted_device', [
                                 'user_id' => $user['id'],
                                 'email' => $user['email'],
                                 'role' => $user['role']
                             ]);
-                            
+
                             $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
                             if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
                                 $redirect = 'index.php';
                             }
-                            
+
                             header("Location: $redirect");
                             exit;
                         } else {
@@ -157,38 +152,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $_SESSION['pending_2fa_user_id'] = $user['id'];
                             $show2FAForm = true;
                             $pendingUserId = $user['id'];
-                            
+
                             Security::logSecurityEvent('2fa_required', [
                                 'user_id' => $user['id'],
                                 'email' => $user['email']
                             ]);
                         }
                     } else {
-                    */
                         // Login successful without 2FA
                         $_SESSION['user_id'] = $user['id'];
                         $_SESSION['user_email'] = $user['email'];
                         $_SESSION['user_role'] = $user['role'];
-                        
-                        // Regenerate session ID for security
+
                         session_regenerate_id(true);
-                        
-                        // Log successful login
+
                         Security::logSecurityEvent('user_login_success', [
                             'user_id' => $user['id'],
                             'email' => $user['email'],
                             'role' => $user['role']
                         ]);
-                        
-                        // Validate redirect URL to prevent open redirects
+
                         $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
                         if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
                             $redirect = 'index.php';
                         }
-                        
+
                         header("Location: $redirect");
                         exit;
-                    //}
+                    }
                 } else {
                     $error = 'Invalid email or password.';
                     Security::logSecurityEvent('login_failed', [
