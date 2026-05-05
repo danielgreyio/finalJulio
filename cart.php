@@ -83,7 +83,12 @@ if (!empty($cart)) {
                                         <p class="text-gray-600 text-sm mt-1">
                                             <?= htmlspecialchars(substr($item['product']['description'], 0, 100)) ?>...
                                         </p>
-                                        <p class="text-blue-600 font-semibold mt-2">$<?= number_format($item['product']['price'], 2) ?></p>
+                                        <p class="text-blue-600 font-semibold mt-2">
+                                            $<?= number_format($item['product']['price'], 2) ?>
+                                            <?php if (!empty($item['product']['unit_of_measure'])): ?>
+                                                <span class="text-gray-400 font-normal text-sm">/ <?= htmlspecialchars($item['product']['unit_of_measure']) ?></span>
+                                            <?php endif; ?>
+                                        </p>
                                     </div>
                                     
                                     <!-- Quantity Controls -->

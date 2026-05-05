@@ -110,6 +110,11 @@ $twitterTitle = !empty($product['twitter_title']) ? $product['twitter_title'] : 
 $twitterDescription = !empty($product['twitter_description']) ? $product['twitter_description'] : substr($product['description'], 0, 200);
 $twitterImage = !empty($product['twitter_image']) ? $product['twitter_image'] : (!empty($product['image_url']) ? $product['image_url'] : 'https://ventdepot.com/images/default-product.jpg');
 
+// Pricing tiers
+$tiersStmt = $pdo->prepare("SELECT min_quantity, price_per_unit FROM product_pricing_tiers WHERE product_id = ? ORDER BY min_quantity ASC");
+$tiersStmt->execute([$productId]);
+$pricingTiers = $tiersStmt->fetchAll();
+
 // Related products
 $relatedStmt = $pdo->prepare("SELECT * FROM products WHERE category_id = ? AND id != ? AND is_active = TRUE ORDER BY RAND() LIMIT 4");
 $relatedStmt->execute([$product['category_id'], $productId]);
@@ -272,7 +277,7 @@ $relatedProducts = $relatedStmt->fetchAll();
                 <?php endif; ?>
                 
                 <!-- Price -->
-                <div class="mb-6">
+                <div class="mb-2">
                     <?php if (!empty($product['compare_price']) && $product['compare_price'] > $product['price']): ?>
                         <div class="flex items-baseline">
                             <span class="text-3xl font-bold text-gray-900">$<?= number_format($product['price'], 2) ?></span>
@@ -284,8 +289,40 @@ $relatedProducts = $relatedStmt->fetchAll();
                     <?php else: ?>
                         <span class="text-3xl font-bold text-gray-900">$<?= number_format($product['price'], 2) ?></span>
                     <?php endif; ?>
+                    <?php if (!empty($product['unit_of_measure'])): ?>
+                        <span class="ml-2 text-sm text-gray-500">/ <?= htmlspecialchars($product['unit_of_measure']) ?></span>
+                    <?php endif; ?>
                 </div>
-                
+
+                <!-- Bulk Pricing Tiers -->
+                <?php if (!empty($pricingTiers)): ?>
+                <div class="mb-6 overflow-hidden rounded-lg border border-gray-200">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price per unit</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            <?php foreach ($pricingTiers as $idx => $tier):
+                                $nextTier = $pricingTiers[$idx + 1] ?? null;
+                                $rangeLabel = $nextTier
+                                    ? $tier['min_quantity'] . '–' . ($nextTier['min_quantity'] - 1)
+                                    : $tier['min_quantity'] . '+';
+                            ?>
+                            <tr class="<?= $idx === 0 ? 'font-medium' : '' ?>">
+                                <td class="px-4 py-2 text-gray-700"><?= $rangeLabel ?> <?= htmlspecialchars($product['unit_of_measure'] ?? 'pcs') ?></td>
+                                <td class="px-4 py-2 text-gray-900">$<?= number_format($tier['price_per_unit'], 2) ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php else: ?>
+                <div class="mb-6"></div>
+                <?php endif; ?>
+
                 <!-- Stock Status -->
                 <div class="mb-6">
                     <?php if ($product['quantity'] > 10): ?>

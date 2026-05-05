@@ -1,6 +1,6 @@
 <?php
 require_once 'config/database.php';
-require_once 'classes\CMSFrontend.php';
+require_once 'classes/CMSFrontend.php';
 
 // Initialize CMS frontend helper
 $cms = new CMSFrontend($pdo);
@@ -8,21 +8,18 @@ $cms = new CMSFrontend($pdo);
 // Fetch featured products from CMS carousel
 $featuredProducts = $cms->getProductsInCarousel('Featured Products', 8);
 
-// Fetch categories
-$stmt = $pdo->prepare("SELECT DISTINCT category FROM products WHERE category IS NOT NULL");
+// Construction categories from DB
+$stmt = $pdo->prepare("SELECT id, name, slug FROM categories WHERE is_active = TRUE ORDER BY sort_order ASC LIMIT 6");
 $stmt->execute();
-$categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
+$dummyCategories = $stmt->fetchAll();
 
-// Fetch default products for fallback
-$stmt = $pdo->prepare("SELECT * FROM products ORDER BY created_at DESC LIMIT 50");
+// Fetch featured products for the grid (active products, newest first)
+$stmt = $pdo->prepare("SELECT * FROM products WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 36");
 $stmt->execute();
 $defaultProducts = $stmt->fetchAll();
 
 // Get SEO metadata for homepage
 $seoMetadata = $cms->getSEOMetadata('homepage');
-
-// Dummy data for demonstration
-$dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty', 'Automotive', 'Toys', 'Computers', 'Health', 'Jewelry'];
 ?>
 
 <!DOCTYPE html>
@@ -30,12 +27,14 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>ShopNow - E-commerce Homepage</title>
+<title>VentDepot — Materiales de Construcción en México</title>
+<meta name="description" content="VentDepot: el marketplace líder de materiales de construcción en México. Cemento, varilla, herramientas, plomería, eléctrico y más.">
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
@@ -74,7 +73,7 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <header class="sticky top-0 z-40 flex w-full flex-col bg-white shadow-sm dark:bg-[#1a1a1a] dark:shadow-gray-900/10">
 <div class="hidden border-b border-[#f5f1f0] px-4 py-2 lg:flex lg:justify-end lg:px-10 dark:border-[#333]">
 <div class="flex items-center gap-6 text-xs font-medium text-[#8a6b60] dark:text-gray-400">
-<a class="hover:text-primary transition-colors" href="#">Sell on ShopNow</a>
+<a class="hover:text-primary transition-colors" href="#">Sell on VentDepot</a>
 <a class="hover:text-primary transition-colors" href="#">Help Center</a>
 <a class="hover:text-primary transition-colors" href="#">Buyer Protection</a>
 <a class="flex items-center gap-1 hover:text-primary transition-colors" href="#">
@@ -342,13 +341,26 @@ Shop Electronics
 
 <!-- Right Side: 2x3 Album -->
 <div class="grid grid-cols-2 grid-rows-3 gap-4">
-<?php 
-$albumCategories = array_slice($dummyCategories, 0, 6);
-foreach ($albumCategories as $category): ?>
-<div class="bg-gray-100 dark:bg-[#2a2a2a] rounded-lg p-4 flex flex-col items-center justify-center">
-<div class="bg-gray-200 border-2 border-dashed rounded-xl w-12 h-12 mb-2"></div>
-<div class="font-medium text-center text-xs"><?= htmlspecialchars($category) ?></div>
-</div>
+<?php
+$categoryIcons = [
+    'construccion'       => 'fa-hard-hat',
+    'herramientas'       => 'fa-tools',
+    'electrico'          => 'fa-bolt',
+    'plomeria'           => 'fa-faucet',
+    'seguridad-industrial'=> 'fa-shield-alt',
+    'acabados'           => 'fa-paint-roller',
+    'ferreteria-general' => 'fa-screwdriver',
+];
+foreach ($dummyCategories as $cat):
+    $icon = $categoryIcons[$cat['slug']] ?? 'fa-box';
+?>
+<a href="products.php?category=<?= urlencode($cat['slug']) ?>"
+   class="bg-gray-100 dark:bg-[#2a2a2a] rounded-lg p-4 flex flex-col items-center justify-center hover:bg-orange-50 dark:hover:bg-[#3a2a1a] transition-colors">
+    <div class="flex items-center justify-center w-12 h-12 mb-2 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm">
+        <i class="fas <?= $icon ?> text-xl text-primary"></i>
+    </div>
+    <div class="font-medium text-center text-xs"><?= htmlspecialchars($cat['name']) ?></div>
+</a>
 <?php endforeach; ?>
 </div>
 </div>
