@@ -40,10 +40,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($code) {
             // Verify TOTP code
-            $isValid = $twoFA->verifyUserCode($pendingUserId, $code);
+            // $isValid = $twoFA->verifyUserCode($pendingUserId, $code);
         } elseif ($backupCode) {
             // Verify backup code
-            $isValid = $twoFA->verifyBackupCode($pendingUserId, $backupCode);
+            // $isValid = $twoFA->verifyBackupCode($pendingUserId, $backupCode);
         }
         
         if ($isValid) {
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $deviceName = 'Web Browser - ' . date('M j, Y');
                     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
                     $ipAddress = Security::getClientIP();
-                    $twoFA->createTrustedDevice($pendingUserId, $deviceName, $userAgent, $ipAddress);
+                    // $twoFA->createTrustedDevice($pendingUserId, $deviceName, $userAgent, $ipAddress);
                 }
                 
                 // Clean up pending session
@@ -97,105 +97,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } else {
         // Regular login process
-        // Rate limiting - 5 attempts per 15 minutes
-        if (!Security::checkRateLimit('login', 5, 900)) {
-            $error = 'Too many login attempts. Please wait 15 minutes before trying again.';
-            Security::logSecurityEvent('login_rate_limit_exceeded', ['ip' => Security::getClientIP()], 'warning');
+        // RATE LIMITING DISABLED COMPLETELY
+        
+        // Sanitize input
+        $email = Security::sanitizeInput($_POST['email'] ?? '', 'email');
+        $password = $_POST['password'] ?? '';
+        
+        // Validation
+        $rules = [
+            'email' => ['required' => true, 'type' => 'email'],
+            'password' => ['required' => true, 'min_length' => 1]
+        ];
+        
+        $errors = Security::validateInput(['email' => $email, 'password' => $password], $rules);
+        
+        if (!empty($errors)) {
+            $error = implode(' ', $errors);
         } else {
-            // Sanitize input
-            $email = Security::sanitizeInput($_POST['email'] ?? '', 'email');
-            $password = $_POST['password'] ?? '';
+            // Check user credentials
+            $stmt = $pdo->prepare("SELECT id, email, password, role FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
             
-            // Validation
-            $rules = [
-                'email' => ['required' => true, 'type' => 'email'],
-                'password' => ['required' => true, 'min_length' => 1]
-            ];
+            // DEBUG LOGGING
+            $logMsg = date('[Y-m-d H:i:s] ') . "Login attempt for: $email. User found: " . ($user ? 'Yes' : 'No') . ". ";
+            if ($user) {
+                $verify = password_verify($password, $user['password']);
+                $logMsg .= "Password verify: " . ($verify ? 'Pass' : 'FAIL') . ". Hash: " . substr($user['password'], 0, 10) . "...";
+            }
+            file_put_contents('login_debug.txt', $logMsg . "\n", FILE_APPEND);
             
-            $errors = Security::validateInput(['email' => $email, 'password' => $password], $rules);
-            
-            if (!empty($errors)) {
-                $error = implode(' ', $errors);
-            } else {
-                // Check user credentials
-                $stmt = $pdo->prepare("SELECT id, email, password, role FROM users WHERE email = ?");
-                $stmt->execute([$email]);
-                $user = $stmt->fetch();
+            if ($user && Security::verifyPassword($password, $user['password'])) {
+                // Login successful without 2FA
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_email'] = $user['email'];
+                $_SESSION['user_role'] = $user['role'];
                 
-                if ($user && Security::verifyPassword($password, $user['password'])) {
-                    // Temporarily disable 2FA check until tables are set up
-                    /*
-                    // Check if 2FA is enabled
-                    if ($twoFA->isEnabled($user['id'])) {
-                        // Check if device is trusted
-                        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-                        $ipAddress = Security::getClientIP();
-                        
-                        if ($twoFA->isTrustedDevice($user['id'], $userAgent, $ipAddress)) {
-                            // Skip 2FA for trusted device
-                            $_SESSION['user_id'] = $user['id'];
-                            $_SESSION['user_email'] = $user['email'];
-                            $_SESSION['user_role'] = $user['role'];
-                            
-                            session_regenerate_id(true);
-                            
-                            Security::logSecurityEvent('user_login_success_trusted_device', [
-                                'user_id' => $user['id'],
-                                'email' => $user['email'],
-                                'role' => $user['role']
-                            ]);
-                            
-                            $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                            if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                                $redirect = 'index.php';
-                            }
-                            
-                            header("Location: $redirect");
-                            exit;
-                        } else {
-                            // Require 2FA verification
-                            $_SESSION['pending_2fa_user_id'] = $user['id'];
-                            $show2FAForm = true;
-                            $pendingUserId = $user['id'];
-                            
-                            Security::logSecurityEvent('2fa_required', [
-                                'user_id' => $user['id'],
-                                'email' => $user['email']
-                            ]);
-                        }
-                    } else {
-                    */
-                        // Login successful without 2FA
-                        $_SESSION['user_id'] = $user['id'];
-                        $_SESSION['user_email'] = $user['email'];
-                        $_SESSION['user_role'] = $user['role'];
-                        
-                        // Regenerate session ID for security
-                        session_regenerate_id(true);
-                        
-                        // Log successful login
-                        Security::logSecurityEvent('user_login_success', [
-                            'user_id' => $user['id'],
-                            'email' => $user['email'],
-                            'role' => $user['role']
-                        ]);
-                        
-                        // Validate redirect URL to prevent open redirects
-                        $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                        if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                            $redirect = 'index.php';
-                        }
-                        
-                        header("Location: $redirect");
-                        exit;
-                    //}
-                } else {
-                    $error = 'Invalid email or password.';
-                    Security::logSecurityEvent('login_failed', [
-                        'attempted_email' => $email,
-                        'ip' => Security::getClientIP()
-                    ], 'warning');
+                // Regenerate session ID for security
+                session_regenerate_id(true);
+                
+                // Log successful login
+                Security::logSecurityEvent('user_login_success', [
+                    'user_id' => $user['id'],
+                    'email' => $user['email'],
+                    'role' => $user['role']
+                ]);
+                
+                // Validate redirect URL to prevent open redirects
+                $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
+                if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
+                    $redirect = 'index.php';
                 }
+                
+                header("Location: $redirect");
+                exit;
+            } else {
+                $error = 'Invalid email or password.';
+                Security::logSecurityEvent('login_failed', [
+                    'attempted_email' => $email,
+                    'ip' => Security::getClientIP()
+                ], 'warning');
             }
         }
     }
@@ -207,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- v2 -->
     <title>Login - VentDepot</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

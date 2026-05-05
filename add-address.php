@@ -22,8 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $isDefault = isset($_POST['is_default']);
     
     // Validation
-    if (empty($addressName) || empty($recipientName) || empty($addressLine1) || empty($city) || empty($state) || empty($postalCode)) {
+    if (empty($addressName) || empty($recipientName) || empty($addressLine1) || empty($city) || empty($postalCode)) {
         $error = 'Please fill in all required fields.';
+    } elseif ($country === 'United States' && empty($state)) {
+        $error = 'State is required for United States addresses.';
     } else {
         try {
             $pdo->beginTransaction();
@@ -310,15 +312,42 @@ $addressCount = $countStmt->fetchColumn();
             e.target.value = value;
         });
         
+        // Country change handler
+        const countrySelect = document.getElementById('country');
+        const stateSelect = document.getElementById('state');
+        const stateLabel = document.querySelector('label[for="state"]');
+        
+        function updateStateRequirement() {
+            if (countrySelect.value === 'United States') {
+                stateSelect.required = true;
+                stateLabel.innerHTML = 'State/Province *';
+                stateSelect.parentElement.style.display = 'block';
+            } else {
+                stateSelect.required = false;
+                stateLabel.innerHTML = 'State/Province (Optional)';
+                // Optional: You could hide it entirely for some countries or leave it visible but optional
+                // stateSelect.parentElement.style.display = 'none'; 
+            }
+        }
+
+        countrySelect.addEventListener('change', updateStateRequirement);
+        
+        // Run on load
+        updateStateRequirement();
+
         // Address validation
         document.querySelector('form').addEventListener('submit', function(e) {
             const postalCode = document.getElementById('postal_code').value;
-            const postalPattern = /^\d{5}(-\d{4})?$/;
+            const country = document.getElementById('country').value;
             
-            if (!postalPattern.test(postalCode)) {
-                e.preventDefault();
-                alert('Please enter a valid ZIP code (12345 or 12345-6789)');
-                return false;
+            // Only validate ZIP format for US
+            if (country === 'United States') {
+                const postalPattern = /^\d{5}(-\d{4})?$/;
+                if (!postalPattern.test(postalCode)) {
+                    e.preventDefault();
+                    alert('Please enter a valid US ZIP code (12345 or 12345-6789)');
+                    return false;
+                }
             }
         });
     </script>

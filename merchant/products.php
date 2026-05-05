@@ -22,8 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = 'Product deleted successfully.';
         }
     } elseif ($action === 'toggle_status' && $productId > 0) {
-        // Toggle product active status (using stock as active indicator)
-        $stmt = $pdo->prepare("UPDATE products SET stock = CASE WHEN stock > 0 THEN 0 ELSE 1 END WHERE id = ? AND merchant_id = ?");
+        // Toggle product active status (using inventory as active indicator)
+        $stmt = $pdo->prepare("UPDATE products SET inventory = CASE WHEN inventory > 0 THEN 0 ELSE 1 END WHERE id = ? AND merchant_id = ?");
         $stmt->execute([$productId, $merchantId]);
         $success = 'Product status updated.';
     }
@@ -54,9 +54,9 @@ if (!empty($category)) {
 }
 
 if ($status === 'active') {
-    $whereConditions[] = 'stock > 0';
+    $whereConditions[] = 'inventory > 0';
 } elseif ($status === 'inactive') {
-    $whereConditions[] = 'stock = 0';
+    $whereConditions[] = 'inventory = 0';
 }
 
 $whereClause = 'WHERE ' . implode(' AND ', $whereConditions);
@@ -239,12 +239,12 @@ $categories = $categoryStmt->fetchAll(PDO::FETCH_COLUMN);
                                         $<?= number_format($product['price'], 2) ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <?= $product['stock'] ?>
+                                        <?= $product['inventory'] ?>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                            <?= $product['stock'] > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
-                                            <?= $product['stock'] > 0 ? 'Active' : 'Inactive' ?>
+                                            <?= $product['inventory'] > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
+                                            <?= $product['inventory'] > 0 ? 'Active' : 'Inactive' ?>
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -292,12 +292,12 @@ $categories = $categoryStmt->fetchAll(PDO::FETCH_COLUMN);
                                     <p class="text-sm text-gray-500"><?= htmlspecialchars($product['category'] ?? 'Uncategorized') ?></p>
                                     <div class="flex items-center justify-between mt-2">
                                         <span class="text-lg font-semibold text-gray-900">$<?= number_format($product['price'], 2) ?></span>
-                                        <span class="text-sm text-gray-600">Stock: <?= $product['stock'] ?></span>
+                                        <span class="text-sm text-gray-600">Stock: <?= $product['inventory'] ?></span>
                                     </div>
                                     <div class="flex items-center justify-between mt-3">
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                            <?= $product['stock'] > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
-                                            <?= $product['stock'] > 0 ? 'Active' : 'Inactive' ?>
+                                            <?= $product['inventory'] > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
+                                            <?= $product['inventory'] > 0 ? 'Active' : 'Inactive' ?>
                                         </span>
                                         <div class="flex space-x-3">
                                             <a href="../product.php?id=<?= $product['id'] ?>" class="text-blue-600">

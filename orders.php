@@ -83,7 +83,7 @@ $orders = $stmt->fetchAll();
                                         <?= ucfirst($order['status']) ?>
                                     </span>
                                     <span class="text-lg font-semibold text-gray-900">
-                                        $<?= number_format($order['total_amount'], 2) ?>
+                                        $<?= number_format($order['total'], 2) ?>
                                     </span>
                                 </div>
                             </div>

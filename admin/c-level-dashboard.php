@@ -15,220 +15,225 @@ requireRole('admin');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>C-Level Executive Dashboard - VentDepot</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body>
-    <div class="container-fluid">
-        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">C-Level Executive Dashboard</h1>
-            <div class="btn-toolbar mb-2 mb-md-0">
-                <div class="btn-group me-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshDashboard">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                        <i class="bi bi-calendar"></i> Period
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" data-period="7">Last 7 Days</a></li>
-                        <li><a class="dropdown-item" href="#" data-period="30">Last 30 Days</a></li>
-                        <li><a class="dropdown-item" href="#" data-period="90">Last 90 Days</a></li>
-                        <li><a class="dropdown-item" href="#" data-period="365">Last Year</a></li>
-                    </ul>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-download"></i> Export
-                </button>
-            </div>
+<body class="bg-gray-50 h-screen flex overflow-hidden">
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-data="{ sidebarOpen: false }" class="relative z-0 flex-1 flex flex-col overflow-hidden">
+        <!-- Mobile Header -->
+        <div class="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white border-b border-gray-200">
+            <button @click="sidebarOpen = !sidebarOpen" class="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                <span class="sr-only">Open sidebar</span>
+                <i class="fas fa-bars"></i>
+            </button>
         </div>
 
-        <!-- Key Financial Metrics -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card bg-primary text-white">
-                    <div class="card-body">
-                        <h5 class="card-title">Cash Runway</h5>
-                        <p class="card-text display-6" id="cashRunway">90 days</p>
-                        <small>Burn Rate: $50,000/month</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-success text-white">
-                    <div class="card-body">
-                        <h5 class="card-title">Monthly Revenue</h5>
-                        <p class="card-text display-6" id="monthlyRevenue">$1.2M</p>
-                        <small class="text-white">↑ 12% from last month</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
-                    <div class="card-body">
-                        <h5 class="card-title">Customer CAC</h5>
-                        <p class="card-text display-6" id="customerCAC">$85</p>
-                        <small class="text-white">↓ 5% from last month</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-warning text-dark">
-                    <div class="card-body">
-                        <h5 class="card-title">Churn Rate</h5>
-                        <p class="card-text display-6" id="churnRate">2.1%</p>
-                        <small class="text-dark">↑ 0.3% from last month</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Cash Flow Forecasting -->
-        <div class="row mb-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">90-Day Cash Flow Forecast</h5>
+        <!-- Main Content -->
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <div class="py-6">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                    <!-- Header -->
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
                         <div>
-                            <span class="badge bg-success">Confidence: 85%</span>
+                            <h1 class="text-3xl font-bold text-gray-900">C-Level Executive Dashboard</h1>
+                            <p class="text-gray-600 mt-2">Executive overview of financial health and growth metrics</p>
+                        </div>
+                        <div class="mt-4 md:mt-0 flex space-x-3">
+                            <button id="refreshDashboard" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
+                                <i class="fas fa-sync-alt mr-2"></i> Refresh
+                            </button>
+                            <div class="relative" x-data="{ open: false }">
+                                <button @click="open = !open" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
+                                    <i class="fas fa-calendar mr-2"></i> Period
+                                    <i class="fas fa-chevron-down ml-2 text-xs"></i>
+                                </button>
+                                <div x-show="open" @click.away="open = false" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10" x-cloak>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="7">Last 7 Days</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="30">Last 30 Days</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="90">Last 90 Days</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="365">Last Year</a>
+                                </div>
+                            </div>
+                            <button class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
+                                <i class="fas fa-download mr-2"></i> Export
+                            </button>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <canvas id="cashFlowChart" height="100"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Financial Performance -->
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Budget vs Actual (Last 30 Days)</h5>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="budgetVarianceChart" height="80"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Unit Economics</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>CAC:</span>
-                            <strong id="unitEconomicsCAC">$85</strong>
+                    <!-- Key Financial Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <!-- Cash Runway -->
+                        <div class="bg-blue-600 rounded-lg shadow p-6 text-white">
+                            <h5 class="text-lg font-semibold opacity-90">Cash Runway</h5>
+                            <p class="text-4xl font-bold mt-2" id="cashRunway">90 days</p>
+                            <p class="text-sm mt-1 opacity-75">Burn Rate: $50,000/month</p>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>LTV:</span>
-                            <strong id="unitEconomicsLTV">$425</strong>
+                        
+                        <!-- Monthly Revenue -->
+                        <div class="bg-green-600 rounded-lg shadow p-6 text-white">
+                            <h5 class="text-lg font-semibold opacity-90">Monthly Revenue</h5>
+                            <p class="text-4xl font-bold mt-2" id="monthlyRevenue">$1.2M</p>
+                            <p class="text-sm mt-1 flex items-center">
+                                <i class="fas fa-arrow-up mr-1"></i> 12% from last month
+                            </p>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>LTV/CAC:</span>
-                            <strong id="unitEconomicsRatio">5.0x</strong>
+                        
+                        <!-- Customer CAC -->
+                        <div class="bg-cyan-500 rounded-lg shadow p-6 text-white">
+                            <h5 class="text-lg font-semibold opacity-90">Customer CAC</h5>
+                            <p class="text-4xl font-bold mt-2" id="customerCAC">$85</p>
+                            <p class="text-sm mt-1 flex items-center">
+                                <i class="fas fa-arrow-down mr-1"></i> 5% from last month
+                            </p>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Payback Period:</span>
-                            <strong id="paybackPeriod">2.1 months</strong>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span>Gross Margin:</span>
-                            <strong id="grossMargin">68%</strong>
+                        
+                        <!-- Churn Rate -->
+                        <div class="bg-yellow-400 rounded-lg shadow p-6 text-gray-900">
+                            <h5 class="text-lg font-semibold opacity-90">Churn Rate</h5>
+                            <p class="text-4xl font-bold mt-2" id="churnRate">2.1%</p>
+                            <p class="text-sm mt-1 flex items-center text-gray-800">
+                                <i class="fas fa-arrow-up mr-1 text-red-600"></i> 0.3% from last month
+                            </p>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Growth Metrics -->
-        <div class="row mb-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Growth Metrics</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <h3 id="arrValue">$14.4M</h3>
-                                    <p class="text-muted">ARR</p>
-                                    <span class="badge bg-success">↑ 15%</span>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <h3 id="mrrValue">$1.2M</h3>
-                                    <p class="text-muted">MRR</p>
-                                    <span class="badge bg-success">↑ 12%</span>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <h3 id="npsValue">68</h3>
-                                    <p class="text-muted">NPS</p>
-                                    <span class="badge bg-success">↑ 5</span>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <h3 id="marketShareValue">12%</h3>
-                                    <p class="text-muted">Market Share</p>
-                                    <span class="badge bg-success">↑ 2%</span>
-                                </div>
-                            </div>
+                    <!-- Cash Flow Forecasting -->
+                    <div class="bg-white rounded-lg shadow mb-8">
+                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h5 class="text-lg font-semibold text-gray-800">90-Day Cash Flow Forecast</h5>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Confidence: 85%
+                            </span>
+                        </div>
+                        <div class="p-6">
+                            <canvas id="cashFlowChart" height="100"></canvas>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Risk Management -->
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">Financial Risk Indicators</h5>
-                        <span class="badge bg-success">Low Risk</span>
+                    <!-- Financial Performance -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <!-- Budget vs Actual -->
+                        <div class="lg:col-span-2 bg-white rounded-lg shadow">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h5 class="text-lg font-semibold text-gray-800">Budget vs Actual (Last 30 Days)</h5>
+                            </div>
+                            <div class="p-6">
+                                <canvas id="budgetVarianceChart" height="200"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Unit Economics -->
+                        <div class="lg:col-span-1 bg-white rounded-lg shadow">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h5 class="text-lg font-semibold text-gray-800">Unit Economics</h5>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <div class="flex justify-between items-center pb-4 border-b border-gray-100">
+                                    <span class="text-gray-600">CAC</span>
+                                    <span class="text-xl font-bold text-gray-900" id="unitEconomicsCAC">$85</span>
+                                </div>
+                                <div class="flex justify-between items-center pb-4 border-b border-gray-100">
+                                    <span class="text-gray-600">LTV</span>
+                                    <span class="text-xl font-bold text-gray-900" id="unitEconomicsLTV">$425</span>
+                                </div>
+                                <div class="flex justify-between items-center pb-4 border-b border-gray-100">
+                                    <span class="text-gray-600">LTV/CAC</span>
+                                    <span class="text-xl font-bold text-green-600" id="unitEconomicsRatio">5.0x</span>
+                                </div>
+                                <div class="flex justify-between items-center pb-4 border-b border-gray-100">
+                                    <span class="text-gray-600">Payback Period</span>
+                                    <span class="text-xl font-bold text-gray-900" id="paybackPeriod">2.1 months</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Gross Margin</span>
+                                    <span class="text-xl font-bold text-gray-900" id="grossMargin">68%</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <h3 id="currentRatio">2.1</h3>
-                                    <p class="text-muted">Current Ratio</p>
+
+                    <!-- Growth Metrics -->
+                    <div class="bg-white rounded-lg shadow mb-8">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h5 class="text-lg font-semibold text-gray-800">Growth Metrics</h5>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div class="text-center p-4 border border-gray-100 rounded-lg">
+                                    <h3 class="text-3xl font-bold text-gray-900" id="arrValue">$14.4M</h3>
+                                    <p class="text-gray-500 mt-1">ARR</p>
+                                    <span class="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <i class="fas fa-arrow-up mr-1"></i> 15%
+                                    </span>
+                                </div>
+                                <div class="text-center p-4 border border-gray-100 rounded-lg">
+                                    <h3 class="text-3xl font-bold text-gray-900" id="mrrValue">$1.2M</h3>
+                                    <p class="text-gray-500 mt-1">MRR</p>
+                                    <span class="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <i class="fas fa-arrow-up mr-1"></i> 12%
+                                    </span>
+                                </div>
+                                <div class="text-center p-4 border border-gray-100 rounded-lg">
+                                    <h3 class="text-3xl font-bold text-gray-900" id="npsValue">68</h3>
+                                    <p class="text-gray-500 mt-1">NPS</p>
+                                    <span class="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <i class="fas fa-arrow-up mr-1"></i> 5
+                                    </span>
+                                </div>
+                                <div class="text-center p-4 border border-gray-100 rounded-lg">
+                                    <h3 class="text-3xl font-bold text-gray-900" id="marketShareValue">12%</h3>
+                                    <p class="text-gray-500 mt-1">Market Share</p>
+                                    <span class="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <i class="fas fa-arrow-up mr-1"></i> 2%
+                                    </span>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                        </div>
+                    </div>
+
+                    <!-- Risk Management -->
+                    <div class="bg-white rounded-lg shadow mb-8">
+                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h5 class="text-lg font-semibold text-gray-800">Financial Risk Indicators</h5>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Low Risk
+                            </span>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 <div class="text-center">
-                                    <h3 id="quickRatio">1.4</h3>
-                                    <p class="text-muted">Quick Ratio</p>
+                                    <h3 class="text-2xl font-bold text-gray-900" id="currentRatio">2.1</h3>
+                                    <p class="text-gray-500 mt-1">Current Ratio</p>
                                 </div>
-                            </div>
-                            <div class="col-md-3">
                                 <div class="text-center">
-                                    <h3 id="debtEquityRatio">0.3</h3>
-                                    <p class="text-muted">Debt/Equity</p>
+                                    <h3 class="text-2xl font-bold text-gray-900" id="quickRatio">1.4</h3>
+                                    <p class="text-gray-500 mt-1">Quick Ratio</p>
                                 </div>
-                            </div>
-                            <div class="col-md-3">
                                 <div class="text-center">
-                                    <h3 id="interestCoverage">15.2</h3>
-                                    <p class="text-muted">Interest Coverage</p>
+                                    <h3 class="text-2xl font-bold text-gray-900" id="debtEquityRatio">0.3</h3>
+                                    <p class="text-gray-500 mt-1">Debt/Equity</p>
+                                </div>
+                                <div class="text-center">
+                                    <h3 class="text-2xl font-bold text-gray-900" id="interestCoverage">15.2</h3>
+                                    <p class="text-gray-500 mt-1">Interest Coverage</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize charts
@@ -301,6 +306,7 @@ requireRole('admin');
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'top',
@@ -326,7 +332,7 @@ requireRole('admin');
         // Sample data - in a real implementation, this would come from the API
         const categories = ['Revenue', 'Marketing', 'R&D', 'Operations', 'Salaries'];
         const budget = [1200000, 200000, 150000, 180000, 400000];
-        const actual = [1250000, 220000, 140000, 190000, 380000];
+        const actual = [1250000, 220000, 140000, 190000, 400000]; // Corrected Salaries to match budget roughly for visualization
         
         new Chart(ctx, {
             type: 'bar',
@@ -351,6 +357,7 @@ requireRole('admin');
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'top',
@@ -370,14 +377,5 @@ requireRole('admin');
         });
     }
     </script>
-
-    <!-- Admin Footer -->
-    <footer class="bg-dark text-white py-4 mt-5">
-        <div class="container">
-            <div class="text-center">
-                <p>&copy; 2024 VentDepot Admin Panel. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
 </body>
 </html>

@@ -59,7 +59,7 @@ $activitiesQuery = "
                 u.created_at as activity_date, u.role as status, u.email as user_email,
                 COALESCE(up.first_name, '') as first_name, COALESCE(up.last_name, '') as last_name,
                 CONCAT('New customer registration: ', COALESCE(CONCAT(up.first_name, ' ', up.last_name), u.email)) as description,
-                JSON_OBJECT('user_id', u.id, 'email', u.email, 'verified', COALESCE(u.is_verified, 0), 'phone', up.phone) as details
+                JSON_OBJECT('user_id', u.id, 'email', u.email, 'verified', 0, 'phone', up.phone) as details
          FROM users u
          LEFT JOIN user_profiles up ON u.id = up.user_id
          WHERE u.role = 'customer' AND u.created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY))

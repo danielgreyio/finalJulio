@@ -8,8 +8,6 @@ require_once '../config/database.php';
 
 // Require admin login
 requireRole('admin');
-
-// Removed header include to prevent HTML structure conflicts
 ?>
 
 <!DOCTYPE html>
@@ -18,278 +16,319 @@ requireRole('admin');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cash Flow Forecasting - VentDepot</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Cash Flow Forecasting</h1>
-            <div class="btn-toolbar mb-2 mb-md-0">
-                <div class="btn-group me-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshData">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                        <i class="bi bi-calendar"></i> Period
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" data-period="30">Next 30 Days</a></li>
-                        <li><a class="dropdown-item" href="#" data-period="60">Next 60 Days</a></li>
-                        <li><a class="dropdown-item" href="#" data-period="90">Next 90 Days</a></li>
-                    </ul>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-download"></i> Export
-                </button>
-            </div>
-        </div>
-
-        <!-- Key Metrics -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Current Cash Balance</h5>
-                        <p class="card-text display-6 text-primary" id="currentCashBalance">$1,250,000</p>
-                        <small class="text-muted">As of today</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">90-Day Runway</h5>
-                        <p class="card-text display-6 text-success" id="runwayDays">87 days</p>
-                        <small class="text-muted">Based on current burn rate</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Burn Rate</h5>
-                        <p class="card-text display-6 text-warning" id="burnRate">$48,000</p>
-                        <small class="text-muted">Per month</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Confidence Level</h5>
-                        <p class="card-text display-6 text-info" id="confidenceLevel">82%</p>
-                        <small class="text-muted">Predictive model accuracy</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Cash Flow Forecast Chart -->
-        <div class="row mb-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">90-Day Cash Flow Forecast</h5>
-                        <div>
-                            <span class="badge bg-primary">Daily Forecast</span>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="cashFlowForecastChart" height="120"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Cash Flow Components -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Expected Cash Inflows</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Source</th>
-                                        <th>Amount</th>
-                                        <th>Date</th>
-                                        <th>Confidence</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Product Sales</td>
-                                        <td>$45,000</td>
-                                        <td>2025-09-20</td>
-                                        <td><span class="badge bg-success">95%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Subscription Revenue</td>
-                                        <td>$25,000</td>
-                                        <td>2025-09-22</td>
-                                        <td><span class="badge bg-success">98%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Accounts Receivable</td>
-                                        <td>$18,500</td>
-                                        <td>2025-09-25</td>
-                                        <td><span class="badge bg-warning">75%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Investment Income</td>
-                                        <td>$5,000</td>
-                                        <td>2025-09-30</td>
-                                        <td><span class="badge bg-info">60%</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Expected Cash Outflows</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th>Amount</th>
-                                        <th>Date</th>
-                                        <th>Priority</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Payroll</td>
-                                        <td>$85,000</td>
-                                        <td>2025-09-25</td>
-                                        <td><span class="badge bg-danger">High</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Inventory Purchase</td>
-                                        <td>$42,000</td>
-                                        <td>2025-09-20</td>
-                                        <td><span class="badge bg-warning">Medium</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Marketing</td>
-                                        <td>$18,000</td>
-                                        <td>2025-09-22</td>
-                                        <td><span class="badge bg-warning">Medium</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Office Rent</td>
-                                        <td>$12,000</td>
-                                        <td>2025-09-30</td>
-                                        <td><span class="badge bg-danger">High</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Forecasting Model Details -->
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">Forecasting Model Details</h5>
-                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modelDetailsModal">
-                            <i class="bi bi-info-circle"></i> Model Information
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <h6>Model Performance</h6>
-                                <div class="progress mb-3">
-                                    <div class="progress-bar bg-success" role="progressbar" style="width: 82%">82% Accuracy</div>
-                                </div>
-                                <p class="text-muted">Based on historical data from the past 12 months</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h6>Key Factors</h6>
-                                <ul>
-                                    <li>Historical sales trends</li>
-                                    <li>Seasonal patterns</li>
-                                    <li>Marketing campaign impact</li>
-                                    <li>Economic indicators</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-4">
-                                <h6>Model Updates</h6>
-                                <p>Last updated: 2025-09-14</p>
-                                <p>Next scheduled update: 2025-09-21</p>
-                                <button class="btn btn-sm btn-outline-secondary">Force Model Update</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Model Details Modal -->
-    <div class="modal fade" id="modelDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Forecasting Model Information</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <h6>Model Overview</h6>
-                    <p>Our cash flow forecasting model uses a combination of time series analysis and machine learning algorithms to predict future cash flows with high accuracy.</p>
-                    
-                    <h6>Methodology</h6>
-                    <ul>
-                        <li><strong>Time Series Analysis:</strong> ARIMA models for trend identification</li>
-                        <li><strong>Machine Learning:</strong> Random Forest algorithms for pattern recognition</li>
-                        <li><strong>External Factors:</strong> Economic indicators, market trends, and seasonal adjustments</li>
-                        <li><strong>Validation:</strong> Continuous backtesting against actual results</li>
-                    </ul>
-                    
-                    <h6>Accuracy Metrics</h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Mean Absolute Percentage Error (MAPE):</strong> 12%</p>
-                            <p><strong>Root Mean Square Error (RMSE):</strong> $8,500</p>
-                        </div>
-                        <div class="col-md-6">
-                            <p><strong>R-Squared:</strong> 0.85</p>
-                            <p><strong>Confidence Interval:</strong> ±15%</p>
-                        </div>
-                    </div>
-                    
-                    <h6>Model Limitations</h6>
-                    <p>The model may not account for:</p>
-                    <ul>
-                        <li>Unexpected market disruptions</li>
-                        <li>Sudden changes in customer behavior</li>
-                        <li>Major economic events not captured in historical data</li>
-                    </ul>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen flex overflow-hidden">
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-data="{ sidebarOpen: false }" class="relative z-0 flex-1 flex flex-col overflow-hidden">
+        <!-- Mobile Header -->
+        <div class="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white border-b border-gray-200">
+            <button @click="sidebarOpen = !sidebarOpen" class="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                <span class="sr-only">Open sidebar</span>
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <div class="py-6">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                    <!-- Header -->
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Cash Flow Forecasting</h1>
+                            <p class="text-gray-600 mt-2">Predictive analytics for future financial health</p>
+                        </div>
+                        <div class="mt-4 md:mt-0 flex space-x-3">
+                            <button id="refreshData" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
+                                <i class="fas fa-sync-alt mr-2"></i> Refresh
+                            </button>
+                            <div class="relative" x-data="{ open: false }">
+                                <button @click="open = !open" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
+                                    <i class="fas fa-calendar mr-2"></i> Period
+                                    <i class="fas fa-chevron-down ml-2 text-xs"></i>
+                                </button>
+                                <div x-show="open" @click.away="open = false" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10" x-cloak>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="30">Next 30 Days</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="60">Next 60 Days</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-period="90">Next 90 Days</a>
+                                </div>
+                            </div>
+                            <button class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center">
+                                <i class="fas fa-download mr-2"></i> Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Key Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <!-- Current Cash Balance -->
+                        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+                            <h5 class="text-lg font-semibold text-gray-900">Current Cash Balance</h5>
+                            <p class="text-3xl font-bold text-blue-600 mt-2" id="currentCashBalance">$1,250,000</p>
+                            <p class="text-sm text-gray-500 mt-1">As of today</p>
+                        </div>
+                        
+                        <!-- 90-Day Runway -->
+                        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+                            <h5 class="text-lg font-semibold text-gray-900">90-Day Runway</h5>
+                            <p class="text-3xl font-bold text-green-600 mt-2" id="runwayDays">87 days</p>
+                            <p class="text-sm text-gray-500 mt-1">Based on current burn rate</p>
+                        </div>
+                        
+                        <!-- Burn Rate -->
+                        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
+                            <h5 class="text-lg font-semibold text-gray-900">Burn Rate</h5>
+                            <p class="text-3xl font-bold text-yellow-600 mt-2" id="burnRate">$48,000</p>
+                            <p class="text-sm text-gray-500 mt-1">Per month</p>
+                        </div>
+                        
+                        <!-- Confidence Level -->
+                        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-cyan-500">
+                            <h5 class="text-lg font-semibold text-gray-900">Confidence Level</h5>
+                            <p class="text-3xl font-bold text-cyan-600 mt-2" id="confidenceLevel">82%</p>
+                            <p class="text-sm text-gray-500 mt-1">Predictive model accuracy</p>
+                        </div>
+                    </div>
+
+                    <!-- Cash Flow Forecast Chart -->
+                    <div class="bg-white rounded-lg shadow mb-8">
+                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h5 class="text-lg font-semibold text-gray-800">90-Day Cash Flow Forecast</h5>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Daily Forecast
+                            </span>
+                        </div>
+                        <div class="p-6">
+                            <canvas id="cashFlowForecastChart" height="120"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Cash Flow Components -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <!-- Inflows -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h5 class="text-lg font-semibold text-gray-800">Expected Cash Inflows</h5>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Confidence</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Product Sales</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$45,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-20</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">95%</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Subscription Revenue</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$25,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-22</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">98%</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Accounts Receivable</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$18,500</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-25</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">75%</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Investment Income</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$5,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-30</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">60%</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Outflows -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h5 class="text-lg font-semibold text-gray-800">Expected Cash Outflows</h5>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Payroll</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$85,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-25</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">High</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Inventory Purchase</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$42,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-20</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Medium</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Marketing</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$18,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-22</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Medium</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Office Rent</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$12,000</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2025-09-30</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">High</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Forecasting Model Details -->
+                    <div class="bg-white rounded-lg shadow mb-8" x-data="{ showModal: false }">
+                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h5 class="text-lg font-semibold text-gray-800">Forecasting Model Details</h5>
+                            <button @click="showModal = true" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                                <i class="fas fa-info-circle mr-1"></i> Model Information
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <h6 class="font-medium text-gray-900 mb-2">Model Performance</h6>
+                                    <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
+                                        <div class="bg-green-600 h-4 rounded-full" style="width: 82%"></div>
+                                    </div>
+                                    <p class="text-sm font-semibold text-gray-700">82% Accuracy</p>
+                                    <p class="text-xs text-gray-500 mt-1">Based on historical data from the past 12 months</p>
+                                </div>
+                                <div>
+                                    <h6 class="font-medium text-gray-900 mb-2">Key Factors</h6>
+                                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                                        <li>Historical sales trends</li>
+                                        <li>Seasonal patterns</li>
+                                        <li>Marketing campaign impact</li>
+                                        <li>Economic indicators</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h6 class="font-medium text-gray-900 mb-2">Model Updates</h6>
+                                    <p class="text-sm text-gray-600">Last updated: 2025-09-14</p>
+                                    <p class="text-sm text-gray-600">Next scheduled update: 2025-09-21</p>
+                                    <button class="mt-2 text-sm text-gray-500 hover:text-gray-900 border border-gray-300 rounded px-2 py-1">Force Model Update</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal -->
+                        <div x-show="showModal" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" x-cloak>
+                            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="showModal = false"></div>
+
+                                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                        <div class="sm:flex sm:items-start">
+                                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                                    Forecasting Model Information
+                                                </h3>
+                                                <div class="mt-4 text-sm text-gray-600 space-y-4">
+                                                    <div>
+                                                        <h6 class="font-semibold text-gray-800">Model Overview</h6>
+                                                        <p>Our cash flow forecasting model uses a combination of time series analysis and machine learning algorithms to predict future cash flows with high accuracy.</p>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <h6 class="font-semibold text-gray-800">Methodology</h6>
+                                                        <ul class="list-disc list-inside">
+                                                            <li><strong>Time Series Analysis:</strong> ARIMA models for trend identification</li>
+                                                            <li><strong>Machine Learning:</strong> Random Forest algorithms for pattern recognition</li>
+                                                            <li><strong>External Factors:</strong> Economic indicators, market trends, and seasonal adjustments</li>
+                                                            <li><strong>Validation:</strong> Continuous backtesting against actual results</li>
+                                                        </ul>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <h6 class="font-semibold text-gray-800">Accuracy Metrics</h6>
+                                                        <div class="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <p><strong>MAPE:</strong> 12%</p>
+                                                                <p><strong>RMSE:</strong> $8,500</p>
+                                                            </div>
+                                                            <div>
+                                                                <p><strong>R-Squared:</strong> 0.85</p>
+                                                                <p><strong>Confidence:</strong> ±15%</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <h6 class="font-semibold text-gray-800">Model Limitations</h6>
+                                                        <p>The model may not account for:</p>
+                                                        <ul class="list-disc list-inside">
+                                                            <li>Unexpected market disruptions</li>
+                                                            <li>Sudden changes in customer behavior</li>
+                                                            <li>Major economic events not captured in historical data</li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                        <button type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm" @click="showModal = false">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize charts
@@ -383,6 +422,7 @@ requireRole('admin');
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'top',
@@ -414,15 +454,5 @@ requireRole('admin');
         });
     }
     </script>
-
-    <!-- Footer -->
-    <footer class="footer mt-auto py-3 bg-light">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
-                <span class="text-muted">© 2024 VentDepot Admin Panel</span>
-                <span class="text-muted">Cash Flow Forecasting Report</span>
-            </div>
-        </div>
-    </footer>
 </body>
 </html>

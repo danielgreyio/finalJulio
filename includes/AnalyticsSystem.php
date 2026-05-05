@@ -60,7 +60,7 @@ class AnalyticsSystem {
                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_orders,
                 SUM(total_amount) as gross_revenue,
                 AVG(total_amount) as average_order_value,
-                COUNT(DISTINCT customer_id) as unique_customers
+                COUNT(DISTINCT user_id) as unique_customers
             FROM orders 
             WHERE merchant_id = ? 
             AND created_at BETWEEN ? AND ?
@@ -114,21 +114,21 @@ class AnalyticsSystem {
     private function getCustomerInsights($merchantId, $dateRange) {
         $stmt = $this->pdo->prepare("
             SELECT 
-                COUNT(DISTINCT o.customer_id) as total_customers,
-                COUNT(DISTINCT CASE WHEN order_count > 1 THEN o.customer_id END) as returning_customers,
+                COUNT(DISTINCT o.user_id) as total_customers,
+                COUNT(DISTINCT CASE WHEN order_count > 1 THEN o.user_id END) as returning_customers,
                 AVG(customer_stats.lifetime_value) as avg_customer_ltv,
                 AVG(customer_stats.order_frequency) as avg_order_frequency
             FROM orders o
             JOIN (
                 SELECT 
-                    customer_id,
+                    user_id,
                     COUNT(*) as order_count,
                     SUM(total_amount) as lifetime_value,
                     COUNT(*) / DATEDIFF(MAX(created_at), MIN(created_at)) as order_frequency
                 FROM orders 
                 WHERE merchant_id = ?
-                GROUP BY customer_id
-            ) customer_stats ON o.customer_id = customer_stats.customer_id
+                GROUP BY user_id
+            ) customer_stats ON o.user_id = customer_stats.user_id
             WHERE o.merchant_id = ? 
             AND o.created_at BETWEEN ? AND ?
         ");
@@ -144,10 +144,10 @@ class AnalyticsSystem {
                 SUM(o.total_amount) as total_spent,
                 MAX(o.created_at) as last_order_date
             FROM orders o
-            JOIN users u ON o.customer_id = u.id
+            JOIN users u ON o.user_id = u.id
             LEFT JOIN user_profiles up ON u.id = up.user_id
             WHERE o.merchant_id = ? AND o.created_at BETWEEN ? AND ?
-            GROUP BY o.customer_id
+            GROUP BY o.user_id
             ORDER BY total_spent DESC
             LIMIT 10
         ");

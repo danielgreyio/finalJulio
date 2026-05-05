@@ -1,28 +1,54 @@
 <?php
 require_once 'config/database.php';
-require_once 'classes\CMSFrontend.php';
+require_once 'classes/CMSFrontend.php';
+// require_once 'includes/dummy_data.php'; // Removed dummy data dependency
 
 // Initialize CMS frontend helper
 $cms = new CMSFrontend($pdo);
 
-// Fetch featured products from CMS carousel
-$featuredProducts = $cms->getProductsInCarousel('Featured Products', 8);
-
-// Fetch categories
-$stmt = $pdo->prepare("SELECT DISTINCT category FROM products WHERE category IS NOT NULL");
-$stmt->execute();
-$categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-// Fetch default products for fallback
-$stmt = $pdo->prepare("SELECT * FROM products ORDER BY created_at DESC LIMIT 50");
-$stmt->execute();
-$defaultProducts = $stmt->fetchAll();
-
 // Get SEO metadata for homepage
 $seoMetadata = $cms->getSEOMetadata('homepage');
 
-// Dummy data for demonstration
-$dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty', 'Automotive', 'Toys', 'Computers', 'Health', 'Jewelry'];
+// Fetch "Flash Deals" (random selection for now, or based on discount)
+$stmt = $pdo->prepare("SELECT * FROM products WHERE inventory > 0 ORDER BY RAND() LIMIT 6");
+$stmt->execute();
+$flashDeals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch "Today Offers"
+$stmt = $pdo->prepare("SELECT * FROM products WHERE inventory > 0 ORDER BY created_at DESC LIMIT 6");
+$stmt->execute();
+$todayOffers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch "Featured Products"
+$stmt = $pdo->prepare("SELECT * FROM products WHERE inventory > 0 LIMIT 12");
+$stmt->execute();
+$featuredProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle image URL fallback for all fetched products
+function processProductsForDisplay(&$products) {
+    global $pdo; // Or pass it in if preferred, but for this quick fix global is okay or better yet, fetch images in query
+    foreach ($products as &$p) {
+         // Check for existing image or fetch from product_images table if needed
+         // For now assuming image_url column is populated or we use placeholder
+         if (empty($p['image_url'])) {
+             $p['image_url'] = 'assets/images/placeholder.jpg';
+         }
+         // Ensure numeric fields are set
+         $p['price'] = $p['price'] ?? 0;
+         $p['compare_price'] = $p['compare_price'] ?? 0;
+    }
+}
+
+processProductsForDisplay($flashDeals);
+processProductsForDisplay($todayOffers);
+processProductsForDisplay($featuredProducts);
+
+// Categories for display
+$stmt = $pdo->query("SELECT DISTINCT category FROM products WHERE category IS NOT NULL LIMIT 10");
+$dummyCategories = $stmt->fetchAll(PDO::FETCH_COLUMN);
+if (empty($dummyCategories)) {
+    $dummyCategories = ['Electronics', 'Fashion', 'Home', 'Beauty', 'Sports'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -89,7 +115,7 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <span class="material-symbols-outlined">shopping_bag</span>
 </div>
 <!-- Changed logo to VentDepot -->
-<h2 class="text-xl font-bold tracking-tight text-[#181311] lg:text-2xl dark:text-white">VentDepot</h2>
+<a href="index.php" class="text-xl font-bold tracking-tight text-[#181311] lg:text-2xl dark:text-white">VentDepot</a>
 </div>
 <div class="hidden max-w-[700px] flex-1 lg:block">
 <div class="flex h-11 w-full items-center rounded-full border border-gray-300 bg-white p-[2px] dark:border-gray-700 dark:bg-[#2a2a2a]">
@@ -108,10 +134,17 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <div class="hidden items-center gap-2 lg:flex">
 <span class="material-symbols-outlined text-[28px] text-[#181311] dark:text-gray-300">person</span>
 <div class="flex flex-col">
-<span class="text-xs text-[#8a6b60] dark:text-gray-400">Welcome</span>
-<div class="flex gap-1 text-xs font-bold text-[#181311] dark:text-white">
-<a class="hover:text-primary" href="#">Sign in</a> / <a class="hover:text-primary" href="#">Join</a>
-</div>
+<?php if (isLoggedIn()): ?>
+    <span class="text-xs text-[#8a6b60] dark:text-gray-400">Welcome, <?= htmlspecialchars($_SESSION['user_email'] ?? 'User') ?></span>
+    <div class="flex gap-1 text-xs font-bold text-[#181311] dark:text-white">
+        <a class="hover:text-primary" href="profile.php">Profile</a> / <a class="hover:text-primary" href="logout.php">Logout</a>
+    </div>
+<?php else: ?>
+    <span class="text-xs text-[#8a6b60] dark:text-gray-400">Welcome</span>
+    <div class="flex gap-1 text-xs font-bold text-[#181311] dark:text-white">
+        <a class="hover:text-primary" href="login.php">Sign in</a> / <a class="hover:text-primary" href="register.php">Join</a>
+    </div>
+<?php endif; ?>
 </div>
 </div>
 <button class="relative hidden items-center justify-center rounded-lg p-2 text-[#181311] hover:bg-gray-100 lg:flex dark:text-white dark:hover:bg-[#333]">
@@ -121,11 +154,16 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
 </span>
 </button>
-<button class="relative flex items-center justify-center gap-2 rounded-lg bg-transparent px-3 py-2 text-[#181311] hover:bg-gray-100 dark:bg-transparent dark:text-white dark:hover:bg-[#333]">
+<a href="cart.php" class="relative flex items-center justify-center gap-2 rounded-lg bg-transparent px-3 py-2 text-[#181311] hover:bg-gray-100 dark:bg-transparent dark:text-white dark:hover:bg-[#333]">
 <span class="material-symbols-outlined">shopping_cart</span>
-<span class="hidden text-sm font-bold lg:block">$0.00</span>
-<span class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">0</span>
-</button>
+<?php 
+// Calculate cart total if available in session/cookie, else mock 0
+$cartTotal = isset($_SESSION['cart_total']) ? $_SESSION['cart_total'] : 0.00;
+$cartCount = isset($_SESSION['cart_count']) ? $_SESSION['cart_count'] : 0;
+?>
+<span class="hidden text-sm font-bold lg:block">$<?= number_format($cartTotal, 2) ?></span>
+<span class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white"><?= $cartCount ?></span>
+</a>
 </div>
 </div>
 <div class="hidden border-t border-[#f5f1f0] px-10 py-2.5 lg:flex dark:border-[#333]">
@@ -209,30 +247,34 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <a class="flex items-center gap-1 rounded-full border border-primary px-4 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10" href="#">View all<span class="material-symbols-outlined text-lg">chevron_right</span></a>
 </div>
 <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-<!-- Product items will go here -->
-<?php for ($i = 0; $i < 12; $i++): ?>
+<!-- Flash Deals Loop -->
+<?php foreach ($flashDeals as $product): ?>
 <div class="group flex flex-col overflow-hidden rounded-lg border border-transparent transition-all hover:border-primary hover:shadow-lg dark:hover:border-primary">
-<div class="relative aspect-square w-full overflow-hidden bg-[#f5f1f0] dark:bg-[#2a2a2a]">
-<div class="h-full w-full bg-cover bg-center transition-transform duration-300 group-hover:scale-110" data-alt="Product image" style="background-image: url('https://via.placeholder.com/300x300?text=Product+<?= $i+1 ?>');"></div>
-</div>
+<a href="product.php?id=<?= $product['id'] ?>" class="block relative aspect-square w-full overflow-hidden bg-[#f5f1f0] dark:bg-[#2a2a2a]">
+<div class="h-full w-full bg-cover bg-center transition-transform duration-300 group-hover:scale-110" data-alt="<?= htmlspecialchars($product['name']) ?>" style="background-image: url('<?= $product['image_url'] ?>');"></div>
+</a>
 <div class="flex flex-1 flex-col p-3">
-<h3 class="text-sm font-medium text-[#181311] line-clamp-2 dark:text-white">Product <?= $i+1 ?></h3>
+<a href="product.php?id=<?= $product['id'] ?>">
+<h3 class="text-sm font-medium text-[#181311] line-clamp-2 dark:text-white"><?= htmlspecialchars($product['name']) ?></h3>
+</a>
 <div class="mt-2 flex items-center gap-1">
-<span class="text-xs text-gray-500 line-through">$<?= number_format(rand(20, 100), 2) ?></span>
-<span class="text-sm font-bold text-primary">$<?= number_format(rand(10, 50), 2) ?></span>
+<?php if ($product['compare_price'] > 0): ?>
+<span class="text-xs text-gray-500 line-through">$<?= number_format($product['compare_price'], 2) ?></span>
+<?php endif; ?>
+<span class="text-sm font-bold text-primary">$<?= number_format($product['price'], 2) ?></span>
 </div>
 <div class="mt-2 flex items-center justify-between">
 <div class="flex items-center gap-1 text-xs text-gray-500">
 <span class="material-symbols-outlined text-[14px] text-yellow-400">star</span>
 <span>4.8</span>
 </div>
-<button class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white transition-colors hover:bg-[#e04a1d]">
+<button onclick="addToCart(<?= $product['id'] ?>)" class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white transition-colors hover:bg-[#e04a1d]">
 <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
 </button>
 </div>
 </div>
 </div>
-<?php endfor; ?>
+<?php endforeach; ?>
 </div>
 </section>
 
@@ -249,18 +291,20 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
 <h3 class="font-bold text-gray-800 dark:text-white">Hot Deals</h3>
 <div class="mt-2 space-y-3">
-<?php for ($i = 0; $i < 3; $i++): ?>
+<?php foreach (array_slice($todayOffers, 0, 3) as $product): ?>
 <div class="flex items-center gap-3">
-<div class="h-12 w-12 bg-gray-200 rounded"></div>
+<img src="<?= $product['image_url'] ?>" class="h-12 w-12 bg-gray-200 rounded object-cover">
 <div class="flex-1">
-<div class="text-sm font-medium">Product <?= $i+13 ?></div>
+<a href="product.php?id=<?= $product['id'] ?>" class="text-sm font-medium block hover:text-primary"><?= htmlspecialchars($product['name']) ?></a>
 <div class="flex items-center gap-1">
-<span class="text-primary font-bold">$<?= number_format(rand(10, 50), 2) ?></span>
-<span class="text-xs text-gray-500 line-through">$<?= number_format(rand(20, 100), 2) ?></span>
+<span class="text-primary font-bold">$<?= number_format($product['price'], 2) ?></span>
+<?php if ($product['compare_price'] > 0): ?>
+<span class="text-xs text-gray-500 line-through">$<?= number_format($product['compare_price'], 2) ?></span>
+<?php endif; ?>
 </div>
 </div>
 </div>
-<?php endfor; ?>
+<?php endforeach; ?>
 </div>
 </div>
 
@@ -268,18 +312,20 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
 <h3 class="font-bold text-gray-800 dark:text-white">Super Offers</h3>
 <div class="mt-2 space-y-3">
-<?php for ($i = 3; $i < 6; $i++): ?>
+<?php foreach (array_slice($todayOffers, 3, 3) as $product): ?>
 <div class="flex items-center gap-3">
-<div class="h-12 w-12 bg-gray-200 rounded"></div>
+<img src="<?= $product['image_url'] ?>" class="h-12 w-12 bg-gray-200 rounded object-cover">
 <div class="flex-1">
-<div class="text-sm font-medium">Product <?= $i+13 ?></div>
+<a href="product.php?id=<?= $product['id'] ?>" class="text-sm font-medium block hover:text-primary"><?= htmlspecialchars($product['name']) ?></a>
 <div class="flex items-center gap-1">
-<span class="text-primary font-bold">$<?= number_format(rand(10, 50), 2) ?></span>
-<span class="text-xs text-gray-500 line-through">$<?= number_format(rand(20, 100), 2) ?></span>
+<span class="text-primary font-bold">$<?= number_format($product['price'], 2) ?></span>
+<?php if ($product['compare_price'] > 0): ?>
+<span class="text-xs text-gray-500 line-through">$<?= number_format($product['compare_price'], 2) ?></span>
+<?php endif; ?>
 </div>
 </div>
 </div>
-<?php endfor; ?>
+<?php endforeach; ?>
 </div>
 </div>
 
@@ -287,18 +333,18 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
 <h3 class="font-bold text-gray-800 dark:text-white">Same Day Delivery</h3>
 <div class="mt-2 space-y-3">
-<?php for ($i = 6; $i < 9; $i++): ?>
+<?php foreach (array_slice($flashDeals, 0, 3) as $product): ?>
 <div class="flex items-center gap-3">
-<div class="h-12 w-12 bg-gray-200 rounded"></div>
+<img src="<?= $product['image_url'] ?>" class="h-12 w-12 bg-gray-200 rounded object-cover">
 <div class="flex-1">
-<div class="text-sm font-medium">Product <?= $i+13 ?></div>
+<a href="product.php?id=<?= $product['id'] ?>" class="text-sm font-medium block hover:text-primary"><?= htmlspecialchars($product['name']) ?></a>
 <div class="flex items-center gap-1">
-<span class="text-primary font-bold">$<?= number_format(rand(10, 50), 2) ?></span>
+<span class="text-primary font-bold">$<?= number_format($product['price'], 2) ?></span>
 <span class="text-xs bg-blue-100 text-blue-800 px-1 rounded">Fast</span>
 </div>
 </div>
 </div>
-<?php endfor; ?>
+<?php endforeach; ?>
 </div>
 </div>
 
@@ -306,18 +352,18 @@ $dummyCategories = ['Electronics', 'Fashion', 'Home & Garden', 'Sports', 'Beauty
 <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
 <h3 class="font-bold text-gray-800 dark:text-white">Quick Delivery</h3>
 <div class="mt-2 space-y-3">
-<?php for ($i = 9; $i < 12; $i++): ?>
+<?php foreach (array_slice($flashDeals, 3, 3) as $product): ?>
 <div class="flex items-center gap-3">
-<div class="h-12 w-12 bg-gray-200 rounded"></div>
+<img src="<?= $product['image_url'] ?>" class="h-12 w-12 bg-gray-200 rounded object-cover">
 <div class="flex-1">
-<div class="text-sm font-medium">Product <?= $i+13 ?></div>
+<a href="product.php?id=<?= $product['id'] ?>" class="text-sm font-medium block hover:text-primary"><?= htmlspecialchars($product['name']) ?></a>
 <div class="flex items-center gap-1">
-<span class="text-primary font-bold">$<?= number_format(rand(10, 50), 2) ?></span>
+<span class="text-primary font-bold">$<?= number_format($product['price'], 2) ?></span>
 <span class="text-xs bg-green-100 text-green-800 px-1 rounded">24h</span>
 </div>
 </div>
 </div>
-<?php endfor; ?>
+<?php endforeach; ?>
 </div>
 </div>
 </div>
@@ -363,24 +409,30 @@ foreach ($albumCategories as $category): ?>
 <a class="flex items-center gap-1 rounded-full border border-primary px-4 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10" href="#">View all<span class="material-symbols-outlined text-lg">chevron_right</span></a>
 </div>
 <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-<?php for ($i = 0; $i < 36; $i++): ?>
+<?php foreach ($featuredProducts as $product): ?>
 <div class="group flex flex-col overflow-hidden rounded-lg border border-transparent transition-all hover:border-primary hover:shadow-lg dark:hover:border-primary">
-<div class="relative aspect-square w-full overflow-hidden bg-[#f5f1f0] dark:bg-[#2a2a2a]">
-<div class="h-full w-full bg-cover bg-center transition-transform duration-300 group-hover:scale-110" data-alt="Product image" style="background-image: url('https://via.placeholder.com/300x300?text=Item+<?= $i+1 ?>');"></div>
-<span class="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">-<?= rand(10, 70) ?>%</span>
-</div>
+<a href="product.php?id=<?= $product['id'] ?>" class="block relative aspect-square w-full overflow-hidden bg-[#f5f1f0] dark:bg-[#2a2a2a]">
+<div class="h-full w-full bg-cover bg-center transition-transform duration-300 group-hover:scale-110" data-alt="<?= htmlspecialchars($product['name']) ?>" style="background-image: url('<?= $product['image_url'] ?>');"></div>
+<?php if ($product['compare_price'] > $product['price']): ?>
+<span class="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">-<?= round((($product['compare_price'] - $product['price']) / $product['compare_price']) * 100) ?>%</span>
+<?php endif; ?>
+</a>
 <div class="flex flex-1 flex-col p-3">
-<h3 class="text-sm font-medium text-[#181311] line-clamp-2 dark:text-white">Item <?= $i+1 ?></h3>
+<a href="product.php?id=<?= $product['id'] ?>">
+<h3 class="text-sm font-medium text-[#181311] line-clamp-2 dark:text-white"><?= htmlspecialchars($product['name']) ?></h3>
+</a>
 <div class="mt-2 flex items-center gap-1">
-<span class="text-xs text-gray-500 line-through">$<?= number_format(rand(20, 100), 2) ?></span>
-<span class="text-sm font-bold text-primary">$<?= number_format(rand(10, 50), 2) ?></span>
+<?php if ($product['compare_price'] && $product['compare_price'] > $product['price']): ?>
+<span class="text-xs text-gray-500 line-through">$<?= number_format($product['compare_price'], 2) ?></span>
+<?php endif; ?>
+<span class="text-sm font-bold text-primary">$<?= number_format($product['price'], 2) ?></span>
 </div>
-<button class="mt-2 w-full rounded-lg bg-primary py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#e04a1d]">
+<button onclick="addToCart(<?= $product['id'] ?>)" class="mt-2 w-full rounded-lg bg-primary py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#e04a1d]">
 Add to Cart
 </button>
 </div>
 </div>
-<?php endfor; ?>
+<?php endforeach; ?>
 </div>
 <div class="mt-4 text-center">
 <button class="rounded-lg border border-primary px-6 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/10">
@@ -431,5 +483,37 @@ Load More
 </div>
 </div>
 </footer>
+
+<script>
+    function addToCart(productId) {
+        // Use fetch to call the backend API
+        fetch('api/cart.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'add',
+                product_id: productId,
+                quantity: 1
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Product added to cart!');
+                // We reload to update the cart count in header relative to session data
+                location.reload(); 
+            } else {
+                alert('Failed to add to cart: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding to cart. Make sure you are logged in or server is reachable.');
+        });
+    }
+</script>
+
 </body>
 </html>

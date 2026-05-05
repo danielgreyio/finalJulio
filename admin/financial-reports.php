@@ -7,304 +7,321 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 h-screen flex overflow-hidden">
     <?php
-    // Financial Reports
     require_once '../config/database.php';
-
-    // Require admin login
     requireRole('admin');
-
-    include 'header.php';
     ?>
 
-    <div class="container mx-auto px-4 py-8">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Financial Reports</h1>
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-data="{ sidebarOpen: false }" class="relative z-0 flex-1 flex flex-col overflow-hidden">
+        <!-- Mobile Header -->
+        <div class="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white border-b border-gray-200">
+            <button @click="sidebarOpen = !sidebarOpen" class="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                <span class="sr-only">Open sidebar</span>
+                <i class="fas fa-bars"></i>
+            </button>
         </div>
 
-        <!-- Report Generation Form -->
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">Generate Report</h2>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Report Type</label>
-                    <select id="reportType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="income_statement">Income Statement</option>
-                        <option value="balance_sheet">Balance Sheet</option>
-                        <option value="cash_flow">Cash Flow Statement</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Start Date</label>
-                    <input type="date" id="startDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">End Date</label>
-                    <input type="date" id="endDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div class="flex items-end">
-                    <button onclick="generateReport()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">Generate Report</button>
-                </div>
-            </div>
-        </div>
+        <!-- Main Content -->
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <div class="py-6">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Financial Reports</h1>
+                    </div>
 
-        <!-- Income Statement Report -->
-        <div id="incomeStatementReport" class="bg-white rounded-lg shadow mb-8 hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-800">Income Statement</h2>
-                <p class="text-gray-600 text-sm" id="incomeStatementPeriod"></p>
-            </div>
-            <div class="p-6">
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Revenue</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Product Sales</span>
-                            <span id="productSales">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Service Revenue</span>
-                            <span id="serviceRevenue">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Total Revenue</span>
-                            <span id="totalRevenue">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Expenses</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Cost of Goods Sold</span>
-                            <span id="cogs">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Salaries and Wages</span>
-                            <span id="salaries">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Rent Expense</span>
-                            <span id="rent">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Utilities Expense</span>
-                            <span id="utilities">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Marketing Expense</span>
-                            <span id="marketing">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Shipping Expense</span>
-                            <span id="shippingExpense">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Total Expenses</span>
-                            <span id="totalExpenses">$0.00</span>
+                    <!-- Report Generation Form -->
+                    <div class="bg-white rounded-lg shadow p-6 mb-8">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Generate Report</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Report Type</label>
+                                <select id="reportType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="income_statement">Income Statement</option>
+                                    <option value="balance_sheet">Balance Sheet</option>
+                                    <option value="cash_flow">Cash Flow Statement</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Start Date</label>
+                                <input type="date" id="startDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">End Date</label>
+                                <input type="date" id="endDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="flex items-end">
+                                <button onclick="generateReport()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">Generate Report</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="border-t border-gray-200 pt-4">
-                    <div class="flex justify-between text-lg font-bold">
-                        <span>Net Income</span>
-                        <span id="netIncome">$0.00</span>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Balance Sheet Report -->
-        <div id="balanceSheetReport" class="bg-white rounded-lg shadow mb-8 hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-800">Balance Sheet</h2>
-                <p class="text-gray-600 text-sm" id="balanceSheetDate"></p>
-            </div>
-            <div class="p-6">
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Assets</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Cash</span>
-                            <span id="cashAssets">$0.00</span>
+                    <!-- Income Statement Report -->
+                    <div id="incomeStatementReport" class="bg-white rounded-lg shadow mb-8 hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-xl font-semibold text-gray-800">Income Statement</h2>
+                            <p class="text-gray-600 text-sm" id="incomeStatementPeriod"></p>
                         </div>
-                        <div class="flex justify-between">
-                            <span>Accounts Receivable</span>
-                            <span id="accountsReceivableAssets">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Inventory</span>
-                            <span id="inventoryAssets">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Prepaid Expenses</span>
-                            <span id="prepaidAssets">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Total Assets</span>
-                            <span id="totalAssets">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Liabilities</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Accounts Payable</span>
-                            <span id="accountsPayableLiabilities">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Sales Tax Payable</span>
-                            <span id="salesTaxLiabilities">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Income Tax Payable</span>
-                            <span id="incomeTaxLiabilities">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Loan Payable</span>
-                            <span id="loanLiabilities">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Total Liabilities</span>
-                            <span id="totalLiabilities">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Equity</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Owner Equity</span>
-                            <span id="ownerEquity">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Retained Earnings</span>
-                            <span id="retainedEarnings">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Total Equity</span>
-                            <span id="totalEquity">$0.00</span>
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Revenue</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Product Sales</span>
+                                        <span id="productSales">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Service Revenue</span>
+                                        <span id="serviceRevenue">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Total Revenue</span>
+                                        <span id="totalRevenue">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Expenses</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Cost of Goods Sold</span>
+                                        <span id="cogs">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Salaries and Wages</span>
+                                        <span id="salaries">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Rent Expense</span>
+                                        <span id="rent">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Utilities Expense</span>
+                                        <span id="utilities">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Marketing Expense</span>
+                                        <span id="marketing">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Shipping Expense</span>
+                                        <span id="shippingExpense">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Total Expenses</span>
+                                        <span id="totalExpenses">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-gray-200 pt-4">
+                                <div class="flex justify-between text-lg font-bold">
+                                    <span>Net Income</span>
+                                    <span id="netIncome">$0.00</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="border-t border-gray-200 pt-4">
-                    <div class="flex justify-between text-lg font-bold">
-                        <span>Total Liabilities and Equity</span>
-                        <span id="totalLiabilitiesEquity">$0.00</span>
-                    </div>
-                    <div class="mt-2 text-sm" id="balanceSheetStatus"></div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Cash Flow Statement Report -->
-        <div id="cashFlowReport" class="bg-white rounded-lg shadow mb-8 hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-800">Cash Flow Statement</h2>
-                <p class="text-gray-600 text-sm" id="cashFlowPeriod"></p>
-            </div>
-            <div class="p-6">
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Operating Activities</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Cash Receipts</span>
-                            <span id="cashReceipts">$0.00</span>
+                    <!-- Balance Sheet Report -->
+                    <div id="balanceSheetReport" class="bg-white rounded-lg shadow mb-8 hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-xl font-semibold text-gray-800">Balance Sheet</h2>
+                            <p class="text-gray-600 text-sm" id="balanceSheetDate"></p>
                         </div>
-                        <div class="flex justify-between">
-                            <span>Cash Payments</span>
-                            <span id="cashPayments">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Net Cash from Operating Activities</span>
-                            <span id="netOperatingCash">$0.00</span>
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Assets</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Cash</span>
+                                        <span id="cashAssets">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Accounts Receivable</span>
+                                        <span id="accountsReceivableAssets">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Inventory</span>
+                                        <span id="inventoryAssets">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Prepaid Expenses</span>
+                                        <span id="prepaidAssets">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Total Assets</span>
+                                        <span id="totalAssets">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Liabilities</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Accounts Payable</span>
+                                        <span id="accountsPayableLiabilities">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Sales Tax Payable</span>
+                                        <span id="salesTaxLiabilities">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Income Tax Payable</span>
+                                        <span id="incomeTaxLiabilities">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Loan Payable</span>
+                                        <span id="loanLiabilities">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Total Liabilities</span>
+                                        <span id="totalLiabilities">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Equity</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Owner Equity</span>
+                                        <span id="ownerEquity">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Retained Earnings</span>
+                                        <span id="retainedEarnings">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Total Equity</span>
+                                        <span id="totalEquity">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-gray-200 pt-4">
+                                <div class="flex justify-between text-lg font-bold">
+                                    <span>Total Liabilities and Equity</span>
+                                    <span id="totalLiabilitiesEquity">$0.00</span>
+                                </div>
+                                <div class="mt-2 text-sm" id="balanceSheetStatus"></div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Investing Activities</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Purchase of Equipment</span>
-                            <span id="equipmentPurchase">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Net Cash from Investing Activities</span>
-                            <span id="netInvestingCash">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Financing Activities</h3>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span>Loan Proceeds</span>
-                            <span id="loanProceeds">$0.00</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>Loan Repayments</span>
-                            <span id="loanRepayments">$0.00</span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
-                            <span>Net Cash from Financing Activities</span>
-                            <span id="netFinancingCash">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="border-t border-gray-200 pt-4">
-                    <div class="flex justify-between text-lg font-bold">
-                        <span>Net Increase in Cash</span>
-                        <span id="netCashIncrease">$0.00</span>
-                    </div>
-                    <div class="flex justify-between mt-2">
-                        <span>Cash at Beginning of Period</span>
-                        <span id="cashBeginning">$0.00</span>
-                    </div>
-                    <div class="flex justify-between mt-2 font-bold">
-                        <span>Cash at End of Period</span>
-                        <span id="cashEnding">$0.00</span>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Previous Reports -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-800">Previous Reports</h2>
-            </div>
-            <div class="p-6">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Generated</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200" id="previousReportsTable">
-                            <tr>
-                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading previous reports...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <!-- Cash Flow Statement Report -->
+                    <div id="cashFlowReport" class="bg-white rounded-lg shadow mb-8 hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-xl font-semibold text-gray-800">Cash Flow Statement</h2>
+                            <p class="text-gray-600 text-sm" id="cashFlowPeriod"></p>
+                        </div>
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Operating Activities</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Cash Receipts</span>
+                                        <span id="cashReceipts">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Cash Payments</span>
+                                        <span id="cashPayments">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Net Cash from Operating Activities</span>
+                                        <span id="netOperatingCash">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Investing Activities</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Purchase of Equipment</span>
+                                        <span id="equipmentPurchase">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Net Cash from Investing Activities</span>
+                                        <span id="netInvestingCash">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Financing Activities</h3>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span>Loan Proceeds</span>
+                                        <span id="loanProceeds">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Loan Repayments</span>
+                                        <span id="loanRepayments">$0.00</span>
+                                    </div>
+                                    <div class="flex justify-between border-t border-gray-200 pt-2 font-medium">
+                                        <span>Net Cash from Financing Activities</span>
+                                        <span id="netFinancingCash">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-gray-200 pt-4">
+                                <div class="flex justify-between text-lg font-bold">
+                                    <span>Net Increase in Cash</span>
+                                    <span id="netCashIncrease">$0.00</span>
+                                </div>
+                                <div class="flex justify-between mt-2">
+                                    <span>Cash at Beginning of Period</span>
+                                    <span id="cashBeginning">$0.00</span>
+                                </div>
+                                <div class="flex justify-between mt-2 font-bold">
+                                    <span>Cash at End of Period</span>
+                                    <span id="cashEnding">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Previous Reports -->
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-lg font-semibold text-gray-800">Previous Reports</h2>
+                        </div>
+                        <div class="p-6">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report Name</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Generated</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200" id="previousReportsTable">
+                                        <tr>
+                                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading previous reports...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <script>
@@ -477,14 +494,5 @@
         `;
     }
     </script>
-
-    <!-- Admin Footer -->
-    <footer class="bg-gray-800 text-white py-8 mt-16">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                <p>&copy; 2024 VentDepot Admin Panel. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
 </body>
 </html>

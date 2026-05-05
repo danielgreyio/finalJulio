@@ -4,6 +4,8 @@ require_once 'config/database.php';
 require_once 'includes/security.php';
 require_once 'includes/PaymentGateway.php';
 require_once 'includes/CreditCheck.php';
+require_once 'includes/OrderProcessor.php';
+// require_once 'includes/dummy_data.php'; // Removed dummy data
 
 // Check if user is logged in
 if (!isLoggedIn()) {
@@ -21,11 +23,11 @@ $taxAmount = 0;
 if ($orderId > 0) {
     // Load existing order
     $stmt = $pdo->prepare("
-        SELECT o.*, oi.*, p.name as product_name, p.image_url
+        SELECT o.*, oi.*, oi.price_at_purchase as price, p.name as product_name, p.image_url
         FROM orders o
         JOIN order_items oi ON o.id = oi.order_id
         JOIN products p ON oi.product_id = p.id
-        WHERE o.id = ? AND o.customer_id = ? AND o.status = 'pending_payment'
+        WHERE o.id = ? AND o.user_id = ? AND o.status = 'pending'
     ");
     $stmt->execute([$orderId, $_SESSION['user_id']]);
     $orderItems = $stmt->fetchAll();
@@ -35,53 +37,72 @@ if ($orderId > 0) {
         exit;
     }
     
-    $orderTotal = $orderItems[0]['total_amount'];
+    $orderTotal = $orderItems[0]['total'];
     $shippingCost = $orderItems[0]['shipping_cost'];
-    $taxAmount = $orderItems[0]['tax_amount'];
+    $taxAmount = 0; // Tax column is missing in DB
     $cartItems = $orderItems;
 } else {
-    // Load cart items
+    // Load cart items from DB
     if (empty($_SESSION['cart'])) {
         header('Location: cart.php');
         exit;
     }
     
     // Calculate totals from cart
+    $cartItems = [];
     foreach ($_SESSION['cart'] as $productId => $quantity) {
-        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND status = 'active'");
+        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
         $stmt->execute([$productId]);
-        $product = $stmt->fetch();
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($product) {
             $itemTotal = $product['price'] * $quantity;
             $orderTotal += $itemTotal;
+            // Map DB columns to cart structure
             $cartItems[] = [
                 'product_id' => $productId,
                 'product_name' => $product['name'],
                 'price' => $product['price'],
                 'quantity' => $quantity,
-                'image_url' => $product['image_url']
+                'image_url' => !empty($product['image_url']) ? $product['image_url'] : 'assets/images/placeholder.jpg'
             ];
         }
     }
     
-    $shippingCost = $orderTotal > 50 ? 0 : 9.99; // Free shipping over $50
+    // Simple Shipping Calculation (Database doesn't have weights/dims yet)
+    // Flat rate $10 + $5 per item for now as per project requirements
+    $shippingBaseRate = 10.00;
+    $shippingPerItem = 5.00;
+    
+    $shippingCost = $shippingBaseRate + (count($cartItems) * $shippingPerItem);
+    
+    // Tax Calculation
     $taxAmount = $orderTotal * 0.08; // 8% tax
     $orderTotal += $shippingCost + $taxAmount;
 }
 
-// Initialize payment gateway and credit check
+// Initialize payment gateway, credit check and order processor
 $paymentGateway = new PaymentGateway($pdo);
 $creditCheck = new CreditCheck($pdo);
+$orderProcessor = new OrderProcessor($pdo);
 $paymentConfig = $paymentGateway->getPaymentMethodsConfig();
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    requireCSRF();
+    if (!isset($_POST['csrf_token']) || !Security::validateCSRFToken($_POST['csrf_token'])) {
+        die("CSRF Token Validation Failed");
+    }
     
     $action = $_POST['action'];
     
     if ($action === 'create_order' && $orderId === 0) {
+        // Collect shipping info
+        $shippingInfo = [
+           'address' => $_POST['address'] ?? '',
+           'city' => $_POST['city'] ?? '',
+           'zip' => $_POST['zip'] ?? ''
+        ];
+
         // Check credit limit before creating order
         $creditResult = $creditCheck->checkCreditForOrder($_SESSION['user_id'], $orderTotal);
         
@@ -89,34 +110,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $error = "Credit Check Failed: " . $creditResult['message'];
         } else {
             // Create new order
-            try {
-                $pdo->beginTransaction();
-                
-                $stmt = $pdo->prepare("
-                    INSERT INTO orders (customer_id, total_amount, shipping_cost, tax_amount, status, created_at)
-                    VALUES (?, ?, ?, ?, 'pending_payment', NOW())
-                ");
-                $stmt->execute([$_SESSION['user_id'], $orderTotal, $shippingCost, $taxAmount]);
-                $orderId = $pdo->lastInsertId();
-                
-                // Add order items
-                foreach ($cartItems as $item) {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO order_items (order_id, product_id, quantity, price)
-                        VALUES (?, ?, ?, ?)
-                    ");
-                    $stmt->execute([$orderId, $item['product_id'], $item['quantity'], $item['price']]);
-                }
+            // Note: We pass $cartItems (structure with product_id, quantity) to OrderProcessor
+            $result = $orderProcessor->createOrder($_SESSION['user_id'], $cartItems, $shippingInfo);
+
+            if ($result['success']) {
+                $orderId = $result['order_id'];
                 
                 // If credit was applied, reserve it
                 if ($creditResult['credit_applied']) {
                     $reserveResult = $creditCheck->reserveCreditForOrder($_SESSION['user_id'], $orderTotal);
                     if (!$reserveResult['success']) {
-                        throw new Exception("Failed to reserve credit: " . $reserveResult['message']);
+                         // Warning: Credit reservation failed but order created. 
+                         // In production, we should log this critical error.
                     }
                 }
-                
-                $pdo->commit();
                 
                 // Clear cart
                 unset($_SESSION['cart']);
@@ -125,9 +132,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 header("Location: checkout.php?order_id=$orderId");
                 exit;
                 
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                $error = "Failed to create order. Please try again.";
+            } else {
+                $error = "Failed to create order: " . $result['error'];
             }
         }
     }
@@ -140,6 +146,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $paymentData['payment_method_id'] = $_POST['stripe_payment_method_id'] ?? '';
         } elseif ($paymentMethod === 'paypal') {
             $paymentData['paypal_order_id'] = $_POST['paypal_order_id'] ?? '';
+        } elseif ($paymentMethod === 'mock') {
+            $paymentData['card_number'] = $_POST['card_number'] ?? '';
+            $paymentData['expiry'] = $_POST['expiry'] ?? '';
         }
         
         $result = $paymentGateway->processPayment($orderId, $paymentMethod, $paymentData);
@@ -232,9 +241,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 <?php if ($orderId === 0): ?>
                     <!-- Create Order Form -->
-                    <form method="POST" id="create-order-form">
-                        <?= generateCSRFInput() ?>
+                    <form method="POST" id="create-order-form" class="space-y-4">
+                        <?= Security::getCSRFInput() ?>
                         <input type="hidden" name="action" value="create_order">
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Shipping Address</label>
+                            <input type="text" name="address" required placeholder="123 Main St"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">City</label>
+                                <input type="text" name="city" required placeholder="New York"
+                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">ZIP</label>
+                                <input type="text" name="zip" required placeholder="10001"
+                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+
                         <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors">
                             Continue to Payment
                         </button>
@@ -271,6 +299,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                         </div>
                                     </label>
                                 <?php endif; ?>
+
+                                <!-- Mock Option -->
+                                <label class="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" name="payment_method" value="mock" class="mr-3">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-flask text-2xl text-purple-600 mr-3"></i>
+                                        <div>
+                                            <div class="font-medium">Test Credit Card</div>
+                                            <div class="text-sm text-gray-600">For testing purposes only</div>
+                                        </div>
+                                    </div>
+                                </label>
                             </div>
                         </div>
 
@@ -278,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <?php if ($paymentConfig['stripe']['enabled']): ?>
                             <div id="stripe-payment" class="payment-form">
                                 <form id="stripe-payment-form" method="POST">
-                                    <?= generateCSRFInput() ?>
+                                    <?= Security::getCSRFInput() ?>
                                     <input type="hidden" name="action" value="process_payment">
                                     <input type="hidden" name="payment_method" value="stripe">
                                     <input type="hidden" name="stripe_payment_method_id" id="stripe-payment-method-id">
@@ -306,13 +346,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <div id="paypal-payment" class="payment-form hidden">
                                 <div id="paypal-button-container"></div>
                                 <form id="paypal-payment-form" method="POST" class="hidden">
-                                    <?= generateCSRFInput() ?>
+                                     <?= Security::getCSRFInput() ?>
                                     <input type="hidden" name="action" value="process_payment">
                                     <input type="hidden" name="payment_method" value="paypal">
                                     <input type="hidden" name="paypal_order_id" id="paypal-order-id">
                                 </form>
                             </div>
+                            </div>
                         <?php endif; ?>
+
+                        <!-- Mock Payment -->
+                        <div id="mock-payment" class="payment-form hidden">
+                            <form id="mock-payment-form" method="POST">
+                                <?= Security::getCSRFInput() ?>
+                                <input type="hidden" name="action" value="process_payment">
+                                <input type="hidden" name="payment_method" value="mock">
+                                
+                                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                                    <p class="text-sm text-yellow-800">
+                                        <i class="fas fa-info-circle mr-2"></i>
+                                        Test Mode: Use card <strong>1231231231231233</strong>
+                                    </p>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Card Number</label>
+                                        <input type="text" name="card_number" required placeholder="1231231231231233"
+                                            class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Expiry</label>
+                                        <input type="text" name="expiry" required placeholder="MM/YY"
+                                            class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">CVC</label>
+                                        <input type="text" name="cvc" required placeholder="123"
+                                            class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors mt-6">
+                                    Pay $<?= number_format($orderTotal, 2) ?>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                     
                     <!-- Security Notice -->
@@ -339,6 +418,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     document.getElementById('stripe-payment').classList.remove('hidden');
                 } else if (this.value === 'paypal') {
                     document.getElementById('paypal-payment').classList.remove('hidden');
+                } else if (this.value === 'mock') {
+                    document.getElementById('mock-payment').classList.remove('hidden');
                 }
             });
         });

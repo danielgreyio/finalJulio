@@ -6,64 +6,62 @@ requireRole('merchant');
 
 $merchantId = $_SESSION['user_id'];
 
-// Get merchant statistics
-$statsQuery = "
+// 1. Get Merchant Statistics
+$stmt = $pdo->prepare("
     SELECT 
-        COUNT(p.id) as total_products,
-        COALESCE(SUM(p.stock), 0) as total_inventory,
-        COUNT(CASE WHEN p.stock > 0 THEN 1 END) as active_products,
-        COUNT(CASE WHEN p.stock = 0 THEN 1 END) as out_of_stock
-    FROM products p 
-    WHERE p.merchant_id = ?
-";
-$stmt = $pdo->prepare($statsQuery);
+        COUNT(*) as total_products,
+        COALESCE(SUM(inventory), 0) as total_inventory,
+        COUNT(CASE WHEN inventory > 0 THEN 1 END) as active_products,
+        COUNT(CASE WHEN inventory <= 0 THEN 1 END) as out_of_stock
+    FROM products 
+    WHERE merchant_id = ?
+");
 $stmt->execute([$merchantId]);
-$stats = $stmt->fetch();
+$stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Get recent orders for merchant's products
-$ordersQuery = "
-    SELECT o.*, u.email as customer_email, p.name as product_name
-    FROM orders o
-    JOIN users u ON o.user_id = u.id
-    JOIN products p ON p.merchant_id = ?
-    ORDER BY o.created_at DESC
-    LIMIT 10
-";
-$stmt = $pdo->prepare($ordersQuery);
-$stmt->execute([$merchantId]);
-$recentOrders = $stmt->fetchAll();
-
-// Get sales data for chart (last 7 days)
-$salesQuery = "
-    SELECT 
-        DATE(o.created_at) as order_date,
-        COUNT(o.id) as order_count,
-        COALESCE(SUM(o.total), 0) as daily_revenue
-    FROM orders o
-    JOIN products p ON p.merchant_id = ?
-    WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-    GROUP BY DATE(o.created_at)
-    ORDER BY order_date DESC
-";
-$stmt = $pdo->prepare($salesQuery);
-$stmt->execute([$merchantId]);
-$salesData = $stmt->fetchAll();
-
-// Get top selling products
-$topProductsQuery = "
-    SELECT p.name, p.price, p.stock, COUNT(o.id) as order_count
-    FROM products p
-    LEFT JOIN orders o ON o.user_id IN (
-        SELECT DISTINCT user_id FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    )
-    WHERE p.merchant_id = ?
-    GROUP BY p.id
-    ORDER BY order_count DESC
+// 2. Get Recent Orders
+$stmt = $pdo->prepare("
+    SELECT o.*, u.email as customer_email 
+    FROM orders o 
+    JOIN users u ON o.user_id = u.id 
+    WHERE o.merchant_id = ? 
+    ORDER BY o.created_at DESC 
     LIMIT 5
-";
-$stmt = $pdo->prepare($topProductsQuery);
+");
 $stmt->execute([$merchantId]);
-$topProducts = $stmt->fetchAll();
+$recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 3. Get Sales Data (Last 7 Days)
+$stmt = $pdo->prepare("
+    SELECT DATE(created_at) as order_date, SUM(total) as daily_revenue 
+    FROM orders 
+    WHERE merchant_id = ? 
+      AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
+    GROUP BY DATE(created_at) 
+    ORDER BY order_date ASC
+");
+$stmt->execute([$merchantId]);
+$salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// If no sales data, initialize empty array to avoid chart errors
+if (empty($salesData)) {
+    $salesData = [];
+    // Optional: Fill with 0 for last 7 days used by Chart.js if needed
+    // For now we pass empty, Chart.js handles it or logic below handles it
+}
+
+// 4. Get Top Selling Products (Based on Order Items)
+$stmt = $pdo->prepare("
+    SELECT p.name, p.price, p.inventory as stock, SUM(oi.quantity) as order_count 
+    FROM order_items oi 
+    JOIN products p ON oi.product_id = p.id 
+    WHERE p.merchant_id = ? 
+    GROUP BY p.id 
+    ORDER BY order_count DESC 
+    LIMIT 5
+");
+$stmt->execute([$merchantId]);
+$topProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>

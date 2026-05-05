@@ -37,7 +37,7 @@ class ProductSearch {
             FROM products p 
             LEFT JOIN users m ON p.merchant_id = m.id 
             LEFT JOIN user_profiles mp ON m.id = mp.user_id
-            WHERE p.stock >= 0
+            WHERE p.inventory >= 0
         ";
         
         $whereConditions = [];
@@ -95,7 +95,7 @@ class ProductSearch {
         
         // Stock filter
         if ($params['in_stock']) {
-            $whereConditions[] = "p.stock > 0";
+            $whereConditions[] = "p.inventory > 0";
         }
         
         // Custom filters (attributes, etc.) - commented out due to potential missing fields
@@ -299,7 +299,7 @@ class ProductSearch {
         $stmt = $this->pdo->prepare("
             SELECT DISTINCT name 
             FROM products 
-            WHERE stock >= 0 AND name LIKE ? 
+            WHERE inventory >= 0 AND name LIKE ? 
             ORDER BY name 
             LIMIT $limit
         ");
@@ -314,7 +314,7 @@ class ProductSearch {
         $stmt = $this->pdo->prepare("
             SELECT DISTINCT category 
             FROM products 
-            WHERE stock >= 0 AND category LIKE ? 
+            WHERE inventory >= 0 AND category LIKE ? 
             ORDER BY category 
             LIMIT $limit
         ");
@@ -341,7 +341,7 @@ class ProductSearch {
         $stmt = $this->pdo->prepare("
             SELECT category, COUNT(*) as product_count 
             FROM products 
-            WHERE stock >= 0 AND category IS NOT NULL 
+            WHERE inventory >= 0 AND category IS NOT NULL 
             GROUP BY category 
             ORDER BY product_count DESC 
             LIMIT $limit
@@ -376,7 +376,7 @@ class ProductSearch {
         $stmt = $this->pdo->prepare("
             SELECT category, COUNT(*) as count 
             FROM products 
-            WHERE stock >= 0 AND category IS NOT NULL 
+            WHERE inventory >= 0 AND category IS NOT NULL 
             GROUP BY category 
             ORDER BY count DESC, category ASC
         ");
@@ -403,7 +403,7 @@ class ProductSearch {
         $stmt = $this->pdo->prepare("
             SELECT name, 'product' as type, id
             FROM products 
-            WHERE stock >= 0 AND name LIKE ? 
+            WHERE inventory >= 0 AND name LIKE ? 
             ORDER BY 
                 CASE WHEN name LIKE ? THEN 1 ELSE 2 END,
                 name
@@ -419,7 +419,7 @@ class ProductSearch {
             $stmt = $this->pdo->prepare("
                 SELECT DISTINCT category as name, 'category' as type, NULL as id
                 FROM products 
-                WHERE stock >= 0 AND category LIKE ? 
+                WHERE inventory >= 0 AND category LIKE ? 
                 ORDER BY category
                 LIMIT $remainingLimit
             ");
@@ -477,7 +477,7 @@ class ProductSearch {
      * Get related products based on current search/product
      */
     public function getRelatedProducts($productId = null, $category = null, $tags = [], $limit = 8) {
-        $conditions = ["p.stock >= 0"];
+        $conditions = ["p.inventory >= 0"];
         $params = [];
         
         if ($productId) {

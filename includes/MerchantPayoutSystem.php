@@ -73,7 +73,7 @@ class MerchantPayoutSystem {
                 u.email as customer_email
             FROM merchant_commissions mc
             JOIN orders o ON mc.order_id = o.id
-            JOIN users u ON o.customer_id = u.id
+            JOIN users u ON o.user_id = u.id
             WHERE mc.merchant_id = ?
             ORDER BY mc.created_at DESC
             LIMIT ? OFFSET ?

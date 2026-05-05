@@ -167,269 +167,277 @@ $products = $pdo->query("SELECT id, name FROM products ORDER BY name")->fetchAll
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - VentDepot Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="js/realtime-inventory.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Navigation -->
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between items-center py-4">
-                <div class="flex items-center space-x-4">
-                    <a href="../index.php" class="text-2xl font-bold text-blue-600">VentDepot</a>
-                    <span class="text-gray-400">|</span>
-                    <a href="dashboard.php" class="text-lg font-semibold text-red-600 hover:text-red-700">Admin Panel</a>
-                    <span class="text-gray-400">|</span>
-                    <span class="text-lg text-gray-600">Inventory Management</span>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="suppliers.php" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                        <i class="fas fa-truck mr-2"></i>Suppliers
-                    </a>
-                    <a href="purchase-orders.php" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">
-                        <i class="fas fa-file-invoice mr-2"></i>Purchase Orders
-                    </a>
-                    <a href="inventory-locations.php" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
-                        <i class="fas fa-warehouse mr-2"></i>Locations
-                    </a>
-                    <a href="inventory-receiving.php" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700">
-                        <i class="fas fa-truck-loading mr-2"></i>Receive Inventory
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
+<body class="bg-gray-50 h-screen flex overflow-hidden">
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
 
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-8">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900">Inventory Management</h1>
-                <p class="text-gray-600 mt-2">Monitor stock levels, track movements, and manage inventory across locations</p>
-            </div>
-            <button onclick="openAdjustmentModal()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-200">
-                <i class="fas fa-plus-minus mr-2"></i>Adjust Inventory
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-data="{ sidebarOpen: false }" class="relative z-0 flex-1 flex flex-col overflow-hidden">
+        <!-- Mobile Header -->
+        <div class="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white border-b border-gray-200">
+            <button @click="sidebarOpen = !sidebarOpen" class="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                <span class="sr-only">Open sidebar</span>
+                <i class="fas fa-bars"></i>
             </button>
         </div>
 
-        <!-- Success/Error Messages -->
-        <?php if ($success): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                <?= htmlspecialchars($success) ?>
-            </div>
-        <?php endif; ?>
-        
-        <?php if ($error): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <?= htmlspecialchars($error) ?>
-            </div>
-        <?php endif; ?>
+        <!-- Main Content -->
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <div class="py-6">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                    <!-- Header -->
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Inventory Management</h1>
+                            <p class="text-gray-600 mt-2">Monitor stock levels, track movements, and manage inventory</p>
+                        </div>
+                        <div class="flex flex-wrap gap-3">
+                            <a href="suppliers.php" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                                <i class="fas fa-truck mr-2"></i>Suppliers
+                            </a>
+                            <a href="purchase-orders.php" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">
+                                <i class="fas fa-file-invoice mr-2"></i>POs
+                            </a>
+                            <a href="inventory-locations.php" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                                <i class="fas fa-warehouse mr-2"></i>Locations
+                            </a>
+                            <a href="inventory-receiving.php" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700">
+                                <i class="fas fa-truck-loading mr-2"></i>Receive
+                            </a>
+                            <button onclick="openAdjustmentModal()" class="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900">
+                                <i class="fas fa-plus-minus mr-2"></i>Adjust
+                            </button>
+                        </div>
+                    </div>
 
-        <!-- Statistics Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-box text-blue-600 text-2xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Products in Inventory</p>
-                        <p class="text-2xl font-semibold text-gray-900"><?= number_format($stats['total_products']) ?></p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-warehouse text-green-600 text-2xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Active Locations</p>
-                        <p class="text-2xl font-semibold text-gray-900"><?= number_format($stats['total_locations']) ?></p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Low Stock Items</p>
-                        <p class="text-2xl font-semibold text-gray-900"><?= number_format($stats['low_stock_items']) ?></p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-dollar-sign text-purple-600 text-2xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Total Inventory Value</p>
-                        <p class="text-2xl font-semibold text-gray-900">$<?= number_format($stats['total_value'], 2) ?></p>
-                    </div>
-                </div>
-            </div>
-        </div>
+                    <!-- Success/Error Messages -->
+                    <?php if ($success): ?>
+                        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+                            <?= htmlspecialchars($success) ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($error): ?>
+                        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                            <?= htmlspecialchars($error) ?>
+                        </div>
+                    <?php endif; ?>
 
-        <!-- Filters -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <form method="GET" class="flex flex-wrap items-end gap-4">
-                <div class="flex-1 min-w-64">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
-                    <input type="text" name="search" value="<?= htmlspecialchars($searchQuery) ?>" 
-                           placeholder="Search by product name or category..."
-                           class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                    <select name="location" class="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                        <option value="">All Locations</option>
-                        <?php foreach ($locations as $location): ?>
-                            <option value="<?= $location['id'] ?>" <?= $locationFilter == $location['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($location['location_name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select name="category" class="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                        <option value="">All Categories</option>
-                        <?php foreach ($categories as $category): ?>
-                            <option value="<?= $category['category'] ?>" <?= $categoryFilter === $category['category'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($category['category']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Stock Level</label>
-                    <select name="low_stock" class="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                        <option value="">All Stock Levels</option>
-                        <option value="1" <?= $lowStockFilter === '1' ? 'selected' : '' ?>>Low Stock Only</option>
-                    </select>
-                </div>
-                
-                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                    <i class="fas fa-search mr-2"></i>Filter
-                </button>
-                
-                <a href="inventory.php" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
-                    <i class="fas fa-times mr-2"></i>Clear
-                </a>
-            </form>
-        </div>
+                    <!-- Statistics Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-box text-blue-600 text-2xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-500">Products in Inventory</p>
+                                    <p class="text-2xl font-semibold text-gray-900"><?= number_format($stats['total_products']) ?></p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-warehouse text-green-600 text-2xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-500">Active Locations</p>
+                                    <p class="text-2xl font-semibold text-gray-900"><?= number_format($stats['total_locations']) ?></p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-500">Low Stock Items</p>
+                                    <p class="text-2xl font-semibold text-gray-900"><?= number_format($stats['low_stock_items']) ?></p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-dollar-sign text-purple-600 text-2xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-500">Total Inventory Value</p>
+                                    <p class="text-2xl font-semibold text-gray-900">$<?= number_format($stats['total_value'], 2) ?></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-        <!-- Inventory Table -->
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-900">Inventory Levels (<?= count($inventory) ?>)</h2>
-            </div>
+                    <!-- Filters -->
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <form method="GET" class="flex flex-wrap items-end gap-4">
+                            <div class="flex-1 min-w-64">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
+                                <input type="text" name="search" value="<?= htmlspecialchars($searchQuery) ?>" 
+                                       placeholder="Search by product name or category..."
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                                <select name="location" class="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                    <option value="">All Locations</option>
+                                    <?php foreach ($locations as $location): ?>
+                                        <option value="<?= $location['id'] ?>" <?= $locationFilter == $location['id'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($location['location_name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                                <select name="category" class="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                    <option value="">All Categories</option>
+                                    <?php foreach ($categories as $category): ?>
+                                        <option value="<?= $category['category'] ?>" <?= $categoryFilter === $category['category'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($category['category']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Stock Level</label>
+                                <select name="low_stock" class="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                    <option value="">All Stock Levels</option>
+                                    <option value="1" <?= $lowStockFilter === '1' ? 'selected' : '' ?>>Low Stock Only</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                                <i class="fas fa-search mr-2"></i>Filter
+                            </button>
+                            
+                            <a href="inventory.php" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
+                                <i class="fas fa-times mr-2"></i>Clear
+                            </a>
+                        </form>
+                    </div>
 
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reserved</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reorder Point</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php if (empty($inventory)): ?>
-                            <tr>
-                                <td colspan="9" class="px-6 py-4 text-center text-gray-500">
-                                    No inventory records found. <a href="#" onclick="openAdjustmentModal()" class="text-blue-600 hover:text-blue-800">Add inventory</a>
-                                </td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($inventory as $item): ?>
-                                <tr class="hover:bg-gray-50" data-product-id="<?= $item['product_id'] ?>" data-location-id="<?= $item['location_id'] ?>">
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($item['product_name']) ?></div>
-                                            <div class="text-sm text-gray-500"><?= htmlspecialchars($item['category'] ?? 'Uncategorized') ?></div>
-                                            <?php if ($item['merchant_email']): ?>
-                                                <div class="text-xs text-gray-400">Merchant: <?= htmlspecialchars($item['merchant_email']) ?></div>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($item['location_name']) ?></div>
-                                        <div class="text-sm text-gray-500"><?= htmlspecialchars($item['location_code']) ?></div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 quantity-cell" id="quantity-<?= $item['product_id'] ?>-<?= $item['location_id'] ?>">
-                                        <?= number_format($item['quantity_on_hand']) ?>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <?= number_format($item['quantity_reserved']) ?>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <?= number_format($item['quantity_available']) ?>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <?= number_format($item['reorder_point']) ?>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        $<?= number_format($item['quantity_on_hand'] * $item['price'], 2) ?>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                            <?php
-                                            switch($item['stock_status']) {
-                                                case 'low': echo 'bg-red-100 text-red-800'; break;
-                                                case 'medium': echo 'bg-yellow-100 text-yellow-800'; break;
-                                                case 'good': echo 'bg-green-100 text-green-800'; break;
-                                                default: echo 'bg-gray-100 text-gray-800';
-                                            }
-                                            ?>">
-                                            <?php
-                                            switch($item['stock_status']) {
-                                                case 'low': echo 'Low Stock'; break;
-                                                case 'medium': echo 'Medium'; break;
-                                                case 'good': echo 'Good'; break;
-                                                default: echo 'Unknown';
-                                            }
-                                            ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <div class="flex space-x-2">
-                                            <button onclick="adjustInventory(<?= $item['product_id'] ?>, <?= $item['location_id'] ?>, '<?= htmlspecialchars($item['product_name']) ?>', '<?= htmlspecialchars($item['location_name']) ?>')"
-                                                    class="text-blue-600 hover:text-blue-900" title="Adjust Inventory">
-                                                <i class="fas fa-plus-minus"></i>
-                                            </button>
-                                            <a href="inventory-movements.php?product_id=<?= $item['product_id'] ?>&location_id=<?= $item['location_id'] ?>"
-                                               class="text-green-600 hover:text-green-900" title="View Movements">
-                                                <i class="fas fa-history"></i>
-                                            </a>
-                                            <button onclick="viewDetails(<?= $item['product_id'] ?>, <?= $item['location_id'] ?>)"
-                                                    class="text-purple-600 hover:text-purple-900" title="View Details">
-                                                <i class="fas fa-info-circle"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                    <!-- Inventory Table -->
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-xl font-semibold text-gray-900">Inventory Levels (<?= count($inventory) ?>)</h2>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reserved</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reorder Point</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <?php if (empty($inventory)): ?>
+                                        <tr>
+                                            <td colspan="9" class="px-6 py-4 text-center text-gray-500">
+                                                No inventory records found. <a href="#" onclick="openAdjustmentModal()" class="text-blue-600 hover:text-blue-800">Add inventory</a>
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($inventory as $item): ?>
+                                            <tr class="hover:bg-gray-50" data-product-id="<?= $item['product_id'] ?>" data-location-id="<?= $item['location_id'] ?>">
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div>
+                                                        <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($item['product_name']) ?></div>
+                                                        <div class="text-sm text-gray-500"><?= htmlspecialchars($item['category'] ?? 'Uncategorized') ?></div>
+                                                        <?php if ($item['merchant_email']): ?>
+                                                            <div class="text-xs text-gray-400">Merchant: <?= htmlspecialchars($item['merchant_email']) ?></div>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($item['location_name']) ?></div>
+                                                    <div class="text-sm text-gray-500"><?= htmlspecialchars($item['location_code']) ?></div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 quantity-cell" id="quantity-<?= $item['product_id'] ?>-<?= $item['location_id'] ?>">
+                                                    <?= number_format($item['quantity_on_hand']) ?>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?= number_format($item['quantity_reserved']) ?>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?= number_format($item['quantity_available']) ?>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    <?= number_format($item['reorder_point']) ?>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    $<?= number_format($item['quantity_on_hand'] * $item['price'], 2) ?>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                                        <?php
+                                                        switch($item['stock_status']) {
+                                                            case 'low': echo 'bg-red-100 text-red-800'; break;
+                                                            case 'medium': echo 'bg-yellow-100 text-yellow-800'; break;
+                                                            case 'good': echo 'bg-green-100 text-green-800'; break;
+                                                            default: echo 'bg-gray-100 text-gray-800';
+                                                        }
+                                                        ?>">
+                                                        <?php
+                                                        switch($item['stock_status']) {
+                                                            case 'low': echo 'Low Stock'; break;
+                                                            case 'medium': echo 'Medium'; break;
+                                                            case 'good': echo 'Good'; break;
+                                                            default: echo 'Unknown';
+                                                        }
+                                                        ?>
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                    <div class="flex space-x-2">
+                                                        <button onclick="adjustInventory(<?= $item['product_id'] ?>, <?= $item['location_id'] ?>, '<?= htmlspecialchars($item['product_name']) ?>', '<?= htmlspecialchars($item['location_name']) ?>')"
+                                                                class="text-blue-600 hover:text-blue-900" title="Adjust Inventory">
+                                                            <i class="fas fa-plus-minus"></i>
+                                                        </button>
+                                                        <a href="inventory-movements.php?product_id=<?= $item['product_id'] ?>&location_id=<?= $item['location_id'] ?>"
+                                                           class="text-green-600 hover:text-green-900" title="View Movements">
+                                                            <i class="fas fa-history"></i>
+                                                        </a>
+                                                        <button onclick="viewDetails(<?= $item['product_id'] ?>, <?= $item['location_id'] ?>)"
+                                                                class="text-purple-600 hover:text-purple-900" title="View Details">
+                                                            <i class="fas fa-info-circle"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <!-- Inventory Adjustment Modal -->

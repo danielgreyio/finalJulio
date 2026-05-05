@@ -22,9 +22,10 @@ $stmt = $pdo->prepare("
     SELECT o.*, pt.gateway_reference, pt.payment_method, pt.amount as payment_amount,
            u.email as customer_email
     FROM orders o
-    LEFT JOIN payment_transactions pt ON o.payment_transaction_id = pt.id
-    JOIN users u ON o.customer_id = u.id
-    WHERE o.id = ? AND o.customer_id = ?
+
+    LEFT JOIN payment_transactions pt ON o.id = pt.order_id
+    JOIN users u ON o.user_id = u.id
+    WHERE o.id = ? AND o.user_id = ?
 ");
 $stmt->execute([$orderId, $_SESSION['user_id']]);
 $order = $stmt->fetch();
@@ -36,7 +37,7 @@ if (!$order) {
 
 // Get order items
 $stmt = $pdo->prepare("
-    SELECT oi.*, p.name as product_name, p.image_url, u.email as merchant_email
+    SELECT oi.*, oi.price_at_purchase as price, p.name as product_name, p.image_url, u.email as merchant_email
     FROM order_items oi
     JOIN products p ON oi.product_id = p.id
     JOIN users u ON p.merchant_id = u.id
@@ -147,7 +148,7 @@ $confirmationNumber = 'VD-' . str_pad($orderId, 6, '0', STR_PAD_LEFT) . '-' . da
                 <div class="space-y-3">
                     <div class="flex justify-between">
                         <span class="text-gray-600">Subtotal</span>
-                        <span>$<?= number_format($order['total_amount'] - $order['shipping_cost'] - $order['tax_amount'], 2) ?></span>
+                        <span>$<?= number_format($order['total'] - $order['shipping_cost'], 2) ?></span>
                     </div>
                     
                     <div class="flex justify-between">
@@ -157,13 +158,13 @@ $confirmationNumber = 'VD-' . str_pad($orderId, 6, '0', STR_PAD_LEFT) . '-' . da
                     
                     <div class="flex justify-between">
                         <span class="text-gray-600">Tax</span>
-                        <span>$<?= number_format($order['tax_amount'], 2) ?></span>
+                        <span>$0.00</span>
                     </div>
                     
                     <div class="border-t pt-3">
                         <div class="flex justify-between font-semibold text-lg">
                             <span>Total Paid</span>
-                            <span>$<?= number_format($order['total_amount'], 2) ?></span>
+                            <span>$<?= number_format($order['total'], 2) ?></span>
                         </div>
                     </div>
                 </div>
@@ -235,7 +236,7 @@ $confirmationNumber = 'VD-' . str_pad($orderId, 6, '0', STR_PAD_LEFT) . '-' . da
         if (typeof gtag !== 'undefined') {
             gtag('event', 'purchase', {
                 'transaction_id': '<?= $confirmationNumber ?>',
-                'value': <?= $order['total_amount'] ?>,
+                'value': <?= $order['total'] ?>,
                 'currency': 'USD',
                 'items': [
                     <?php foreach ($orderItems as $index => $item): ?>

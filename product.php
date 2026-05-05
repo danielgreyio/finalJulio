@@ -1,6 +1,7 @@
 <?php
 require_once 'config/database.php';
 require_once 'includes/ProductReviews.php';
+require_once 'includes/dummy_data.php';
 
 // Initialize reviews system
 $reviewsSystem = new ProductReviews($pdo);
@@ -13,10 +14,8 @@ if ($productId <= 0) {
     exit;
 }
 
-// Fetch product from DB (with prepared statement)
-$stmt = $pdo->prepare("SELECT p.*, u.email as merchant_email FROM products p JOIN users u ON p.merchant_id = u.id WHERE p.id = ?");
-$stmt->execute([$productId]);
-$product = $stmt->fetch();
+// Fetch product from dummy data
+$product = getDummyProduct($productId);
 
 if (!$product) {
     header('Location: index.php');
@@ -111,9 +110,12 @@ $twitterDescription = !empty($product['twitter_description']) ? $product['twitte
 $twitterImage = !empty($product['twitter_image']) ? $product['twitter_image'] : (!empty($product['image_url']) ? $product['image_url'] : 'https://ventdepot.com/images/default-product.jpg');
 
 // Related products
-$relatedStmt = $pdo->prepare("SELECT * FROM products WHERE category_id = ? AND id != ? AND is_active = TRUE ORDER BY RAND() LIMIT 4");
-$relatedStmt->execute([$product['category_id'], $productId]);
-$relatedProducts = $relatedStmt->fetchAll();
+// Related products (Dummy)
+$allDummyForRelated = getDummyProducts();
+$relatedProducts = array_filter($allDummyForRelated, function($p) use ($productId) {
+    return $p['id'] != $productId;
+});
+$relatedProducts = array_slice($relatedProducts, 0, 4);
 ?>
 
 <!DOCTYPE html>

@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Update product stock total
             $stmt = $pdo->prepare("
                 UPDATE products 
-                SET stock = (SELECT COALESCE(SUM(quantity_on_hand), 0) FROM product_inventory WHERE product_id = ?)
+                SET inventory = (SELECT COALESCE(SUM(quantity_on_hand), 0) FROM product_inventory WHERE product_id = ?)
                 WHERE id = ?
             ");
             $stmt->execute([$productId, $productId]);

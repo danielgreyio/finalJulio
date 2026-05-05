@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Update product
         $stmt = $pdo->prepare("
             UPDATE products 
-            SET name = ?, description = ?, price = ?, category = ?, stock = ?, image_url = ?,
+            SET name = ?, description = ?, price = ?, category = ?, inventory = ?, image_url = ?,
                 meta_title = ?, meta_description = ?, meta_keywords = ?,
                 og_title = ?, og_description = ?, og_image = ?,
                 twitter_title = ?, twitter_description = ?, twitter_image = ?

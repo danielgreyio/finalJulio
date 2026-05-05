@@ -74,13 +74,23 @@ $revenueQuery = "
 ";
 $stmt = $pdo->prepare($revenueQuery);
 $stmt->execute();
-$revenueData = $stmt->fetchAll();
+$rawData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// If no data, create sample data for the last 7 days to show the chart
-if (empty($revenueData)) {
-    $revenueData = [];
-    for ($i = 6; $i >= 0; $i--) {
-        $date = date('Y-m-d', strtotime("-$i days"));
+// Process data to ensure all last 30 days are represented
+$revenueData = [];
+$map = [];
+
+// Index existing data by date
+foreach ($rawData as $day) {
+    $map[$day['order_date']] = $day;
+}
+
+// Fill in last 30 days
+for ($i = 29; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    if (isset($map[$date])) {
+        $revenueData[] = $map[$date];
+    } else {
         $revenueData[] = [
             'order_date' => $date,
             'order_count' => 0,
@@ -127,695 +137,350 @@ $topMerchants = $stmt->fetchAll();
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Admin Navigation -->
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between items-center py-4">
-                <div class="flex items-center space-x-4">
-                    <a href="../index.php" class="text-2xl font-bold text-blue-600">VentDepot</a>
-                    <span class="text-gray-400">|</span>
-                    <span class="text-lg font-semibold text-red-600">Admin Panel</span>
-                </div>
-                
-                <div class="flex items-center space-x-4">
+<body class="bg-gray-50 h-screen flex overflow-hidden">
+    
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-data="{ sidebarOpen: false }" class="relative z-0 flex-1 flex flex-col overflow-hidden">
+        <!-- Mobile Header -->
+        <div class="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white border-b border-gray-200">
+            <button @click="sidebarOpen = !sidebarOpen" class="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                <span class="sr-only">Open sidebar</span>
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <div class="py-6">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 mb-6 flex justify-between items-center">
+                    <h1 class="text-2xl font-semibold text-gray-900">Dashboard Overview</h1>
+                    
+                    <!-- Profile Dropdown -->
                     <div class="relative" x-data="{ open: false }">
-                        <button @click="open = !open" class="flex items-center space-x-2 text-gray-600 hover:text-blue-600">
-                            <i class="fas fa-user-shield"></i>
-                            <span><?= htmlspecialchars($_SESSION['user_email']) ?></span>
-                            <i class="fas fa-chevron-down text-sm"></i>
+                        <button @click="open = !open" class="flex items-center space-x-2 text-gray-600 hover:text-blue-600 focus:outline-none">
+                            <i class="fas fa-user-circle text-2xl"></i>
+                            <span class="hidden md:inline"><?= htmlspecialchars($_SESSION['user_email']) ?></span>
+                            <i class="fas fa-chevron-down text-xs"></i>
                         </button>
-                        <div x-show="open" @click.away="open = false" 
-                             class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                        <div x-show="open" @click.away="open = false" x-cloak
+                             class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
                             <a href="../index.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View Store</a>
+                            <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+                            <div class="border-t border-gray-100"></div>
                             <a href="../logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</a>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </nav>
 
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Welcome Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p class="text-gray-600 mt-2">Monitor and manage your VentDepot platform</p>
-        </div>
-
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-blue-100">
-                        <i class="fas fa-users text-blue-600 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Total Customers</p>
-                        <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['total_customers']) ?></p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-green-100">
-                        <i class="fas fa-store text-green-600 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Total Merchants</p>
-                        <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['total_merchants']) ?></p>
-                        <?php if ($stats['new_merchants'] > 0): ?>
-                            <p class="text-xs text-green-600">+<?= $stats['new_merchants'] ?> this week</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-yellow-100">
-                        <i class="fas fa-shopping-cart text-yellow-600 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Total Orders</p>
-                        <p class="text-2xl font-bold text-gray-900"><?= number_format($stats['total_orders']) ?></p>
-                        <?php if ($stats['pending_orders'] > 0): ?>
-                            <p class="text-xs text-yellow-600"><?= $stats['pending_orders'] ?> pending</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-purple-100">
-                        <i class="fas fa-dollar-sign text-purple-600 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Total Revenue</p>
-                        <p class="text-2xl font-bold text-gray-900">$<?= number_format($stats['total_revenue'], 2) ?></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-                <div class="space-y-4">
-                    <a href="users.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-blue-100 rounded-lg">
-                            <i class="fas fa-users text-blue-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Manage Users</h3>
-                            <p class="text-sm text-gray-600">View and manage all users</p>
-                        </div>
-                    </a>
-
-                    <a href="merchants.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-green-100 rounded-lg">
-                            <i class="fas fa-store text-green-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Verify Merchants</h3>
-                            <p class="text-sm text-gray-600">Approve merchant applications</p>
-                        </div>
-                    </a>
-
-                    <a href="orders.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-yellow-100 rounded-lg">
-                            <i class="fas fa-shopping-bag text-yellow-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Monitor Orders</h3>
-                            <p class="text-sm text-gray-600">Track all platform orders</p>
-                        </div>
-                    </a>
-
-                    <a href="analytics.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-purple-100 rounded-lg">
-                            <i class="fas fa-chart-bar text-purple-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Platform Analytics</h3>
-                            <p class="text-sm text-gray-600">View detailed platform metrics</p>
-                        </div>
-                    </a>
-
-                    <a href="global-shipping-admin.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-indigo-100 rounded-lg">
-                            <i class="fas fa-shipping-fast text-indigo-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Shipping Management</h3>
-                            <p class="text-sm text-gray-600">Configure shipping providers & rates</p>
-                        </div>
-                    </a>
-
-                    <a href="shipping-info-management.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-teal-100 rounded-lg">
-                            <i class="fas fa-map-marked-alt text-teal-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Geographic Settings</h3>
-                            <p class="text-sm text-gray-600">Manage zones & shipping info</p>
-                        </div>
-                    </a>
-
-                    <a href="suppliers.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-orange-100 rounded-lg">
-                            <i class="fas fa-truck text-orange-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Supplier Management</h3>
-                            <p class="text-sm text-gray-600">Manage suppliers & products</p>
-                        </div>
-                    </a>
-
-                    <a href="inventory.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-yellow-100 rounded-lg">
-                            <i class="fas fa-boxes text-yellow-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Inventory Management</h3>
-                            <p class="text-sm text-gray-600">Track stock levels & movements</p>
-                        </div>
-                    </a>
-
-                    <a href="seo-management.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-green-100 rounded-lg">
-                            <i class="fas fa-search text-green-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">SEO Management</h3>
-                            <p class="text-sm text-gray-600">Manage product SEO & social media tags</p>
-                        </div>
-                    </a>
-
-                    <a href="pricing-management.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-red-100 rounded-lg">
-                            <i class="fas fa-tags text-red-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Price Management</h3>
-                            <p class="text-sm text-gray-600">Manage pricing, discounts & promotions</p>
-                        </div>
-                    </a>
-                    
-                    <!-- Accounting Modules -->
-                    <a href="accounting-dashboard.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-blue-100 rounded-lg">
-                            <i class="fas fa-calculator text-blue-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Accounting Dashboard</h3>
-                            <p class="text-sm text-gray-600">Manage financial records & transactions</p>
-                        </div>
-                    </a>
-                    
-                    <a href="accounts-payable.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-yellow-100 rounded-lg">
-                            <i class="fas fa-money-bill-wave text-yellow-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Accounts Payable</h3>
-                            <p class="text-sm text-gray-600">Manage vendor invoices & payments</p>
-                        </div>
-                    </a>
-                    
-                    <a href="accounts-receivable.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-green-100 rounded-lg">
-                            <i class="fas fa-hand-holding-usd text-green-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Accounts Receivable</h3>
-                            <p class="text-sm text-gray-600">Manage customer invoices & receipts</p>
-                        </div>
-                    </a>
-                    
-                    <a href="financial-reports.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-purple-100 rounded-lg">
-                            <i class="fas fa-chart-line text-purple-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Financial Reports</h3>
-                            <p class="text-sm text-gray-600">Generate financial statements</p>
-                        </div>
-                    </a>
-                    
-                    <!-- C-Level Financial Reporting -->
-                    <a href="c-level-dashboard.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-indigo-100 rounded-lg">
-                            <i class="fas fa-chart-bar text-indigo-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">C-Level Dashboard</h3>
-                            <p class="text-sm text-gray-600">Executive financial dashboard</p>
-                        </div>
-                    </a>
-                    
-                    <a href="cash-flow-forecasting.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-blue-100 rounded-lg">
-                            <i class="fas fa-chart-line text-blue-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Cash Flow Forecasting</h3>
-                            <p class="text-sm text-gray-600">90-day liquidity planning</p>
-                        </div>
-                    </a>
-                    
-                    <a href="budget-vs-actual.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-green-100 rounded-lg">
-                            <i class="fas fa-balance-scale text-green-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Budget vs Actual</h3>
-                            <p class="text-sm text-gray-600">Variance analysis reporting</p>
-                        </div>
-                    </a>
-                    
-                    <a href="unit-economics.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-yellow-100 rounded-lg">
-                            <i class="fas fa-chart-pie text-yellow-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Unit Economics</h3>
-                            <p class="text-sm text-gray-600">CAC, LTV, Payback Period</p>
-                        </div>
-                    </a>
-                    
-                    <a href="growth-metrics.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-purple-100 rounded-lg">
-                            <i class="fas fa-arrow-up text-purple-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Growth Metrics</h3>
-                            <p class="text-sm text-gray-600">ARR, MRR, Churn Rate, NPS</p>
-                        </div>
-                    </a>
-                    
-                    <a href="risk-management.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-red-100 rounded-lg">
-                            <i class="fas fa-exclamation-triangle text-red-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">Risk Management</h3>
-                            <p class="text-sm text-gray-600">Financial risks & compliance</p>
-                        </div>
-                    </a>
-
-                    <!-- CMS Management -->
-                    <a href="cms-dashboard.php" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition duration-200">
-                        <div class="p-2 bg-purple-100 rounded-lg">
-                            <i class="fas fa-desktop text-purple-600"></i>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="font-medium text-gray-900">CMS Management</h3>
-                            <p class="text-sm text-gray-600">Manage frontend content and banners</p>
-                        </div>
-                    </a>
-
-                </div>
-            </div>
-
-            <!-- Revenue Chart -->
-            <div class="lg:col-span-2 bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Revenue Overview (Last 30 Days)</h2>
-                <div class="relative h-64">
-                    <canvas id="revenueChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Activities and Top Merchants -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Recent Activities -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold text-gray-900">Recent Activities</h2>
-                    <div class="flex space-x-2">
-                        <button onclick="filterActivities('all')" class="activity-filter-btn active px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800">All</button>
-                        <button onclick="filterActivities('order')" class="activity-filter-btn px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">Orders</button>
-                        <button onclick="filterActivities('customer')" class="activity-filter-btn px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">Customers</button>
-                        <button onclick="filterActivities('merchant')" class="activity-filter-btn px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">Merchants</button>
-                    </div>
-                </div>
-
-                <?php if (empty($recentActivities)): ?>
-                    <p class="text-gray-500 text-center py-8">No recent activities</p>
-                <?php else: ?>
-                    <div class="space-y-3 max-h-96 overflow-y-auto">
-                        <?php foreach (array_slice($recentActivities, 0, 12) as $activity): ?>
-                            <div class="activity-item activity-<?= $activity['type'] ?> flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                                 onclick="viewActivityDetails('<?= $activity['type'] ?>', <?= $activity['id'] ?>)">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                        <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow duration-200">
+                            <div class="p-5">
                                 <div class="flex items-center">
-                                    <div class="p-2 rounded-lg <?php
-                                        switch($activity['type']) {
-                                            case 'order': echo 'bg-blue-100'; break;
-                                            case 'customer': echo 'bg-green-100'; break;
-                                            case 'merchant': echo 'bg-orange-100'; break;
-                                            case 'product': echo 'bg-purple-100'; break;
-                                            default: echo 'bg-gray-100';
-                                        }
-                                    ?>">
-                                        <i class="fas <?php
-                                            switch($activity['type']) {
-                                                case 'order': echo 'fa-shopping-cart text-blue-600'; break;
-                                                case 'customer': echo 'fa-user text-green-600'; break;
-                                                case 'merchant': echo 'fa-store text-orange-600'; break;
-                                                case 'product': echo 'fa-box text-purple-600'; break;
-                                                default: echo 'fa-circle text-gray-600';
-                                            }
-                                        ?>"></i>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm font-medium text-gray-900">
-                                            <?= htmlspecialchars($activity['description']) ?>
-                                        </p>
-                                        <div class="flex items-center space-x-2 text-xs text-gray-500">
-                                            <span><?= date('M j, Y H:i', strtotime($activity['created_at'])) ?></span>
-                                            <?php if ($activity['user_email']): ?>
-                                                <span>•</span>
-                                                <span><?= htmlspecialchars($activity['user_email']) ?></span>
-                                            <?php endif; ?>
+                                    <div class="flex-shrink-0">
+                                        <div class="rounded-md bg-blue-500 p-3">
+                                            <i class="fas fa-users text-white"></i>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <?php if ($activity['amount'] > 0): ?>
-                                        <span class="text-sm font-medium text-gray-900">$<?= number_format($activity['amount'], 2) ?></span>
-                                    <?php endif; ?>
-                                    <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Total Customers</dt>
+                                            <dd class="text-lg font-bold text-gray-900"><?= number_format($stats['total_customers']) ?></dd>
+                                        </dl>
+                                    </div>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <div class="mt-4 text-center">
-                        <button onclick="showAllActivities()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                            <i class="fas fa-external-link-alt mr-1"></i>View All Activities
-                        </button>
-                    </div>
-                <?php endif; ?>
-            </div>
+                        </div>
 
-            <!-- Top Merchants -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold text-gray-900">Top Merchants (Last 30 Days)</h2>
-                    <a href="merchants.php" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                        <i class="fas fa-external-link-alt mr-1"></i>View All
-                    </a>
+                        <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow duration-200">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="rounded-md bg-green-500 p-3">
+                                            <i class="fas fa-store text-white"></i>
+                                        </div>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Merchants</dt>
+                                            <dd class="flex items-baseline">
+                                                <div class="text-lg font-bold text-gray-900"><?= number_format($stats['total_merchants']) ?></div>
+                                                <?php if ($stats['new_merchants'] > 0): ?>
+                                                    <div class="ml-2 flex items-baseline text-sm font-semibold text-green-600">
+                                                        <i class="fas fa-arrow-up self-center flex-shrink-0 h-3 w-3 text-green-500"></i>
+                                                        <span class="sr-only">Increased by</span>
+                                                        <?= $stats['new_merchants'] ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow duration-200">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="rounded-md bg-yellow-500 p-3">
+                                            <i class="fas fa-shopping-cart text-white"></i>
+                                        </div>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Total Orders</dt>
+                                            <dd class="flex items-baseline">
+                                                <div class="text-lg font-bold text-gray-900"><?= number_format($stats['total_orders']) ?></div>
+                                                <?php if ($stats['pending_orders'] > 0): ?>
+                                                    <div class="ml-2 text-xs font-medium text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">
+                                                        <?= $stats['pending_orders'] ?> pending
+                                                    </div>
+                                                <?php endif; ?>
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow duration-200">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="rounded-md bg-purple-500 p-3">
+                                            <i class="fas fa-dollar-sign text-white"></i>
+                                        </div>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Revenue</dt>
+                                            <dd class="text-lg font-bold text-gray-900">$<?= number_format($stats['total_revenue'], 2) ?></dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Grid: Charts & Action Items -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                        <!-- Revenue Chart (Larger) -->
+                        <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
+                            <h2 class="text-lg font-medium text-gray-900 mb-4">Revenue Trend (30 Days)</h2>
+                            <div class="relative h-72">
+                                <canvas id="revenueChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Action Items (Compact Quick Actions) -->
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <h2 class="text-lg font-medium text-gray-900 mb-4">Pending Tasks</h2>
+                            <div class="space-y-4">
+                                <?php if ($stats['new_merchants'] > 0 || $stats['pending_orders'] > 0): ?>
+                                    
+                                    <?php if ($stats['pending_orders'] > 0): ?>
+                                    <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-100 hover:bg-yellow-100 transition-colors cursor-pointer" onclick="location.href='orders.php?status=pending'">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-box text-yellow-600 mr-3"></i>
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900"><?= $stats['pending_orders'] ?> Orders Pending</p>
+                                                <p class="text-xs text-gray-500">Require processing</p>
+                                            </div>
+                                        </div>
+                                        <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                                    </div>
+                                    <?php endif; ?>
+
+                                    <?php if ($stats['new_merchants'] > 0): ?>
+                                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100 hover:bg-green-100 transition-colors cursor-pointer" onclick="location.href='merchants.php?sort=newest'">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-store text-green-600 mr-3"></i>
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900"><?= $stats['new_merchants'] ?> New Merchants</p>
+                                                <p class="text-xs text-gray-500">Since last week</p>
+                                            </div>
+                                        </div>
+                                        <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                                    </div>
+                                    <?php endif; ?>
+
+                                <?php else: ?>
+                                    <div class="text-center py-8 text-gray-500">
+                                        <i class="fas fa-check-circle text-4xl text-green-400 mb-3"></i>
+                                        <p>All caught up!</p>
+                                        <p class="text-xs">No pending tasks requiring attention.</p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="border-t border-gray-100 pt-4 mt-2">
+                                    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Shortcuts</h3>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <a href="users.php" class="text-xs text-center p-2 bg-gray-50 rounded hover:bg-gray-100 text-gray-600">
+                                            <i class="fas fa-user-plus block mb-1"></i> Add User
+                                        </a>
+                                        <a href="products.php" class="text-xs text-center p-2 bg-gray-50 rounded hover:bg-gray-100 text-gray-600">
+                                            <i class="fas fa-plus block mb-1"></i> Add Product
+                                        </a>
+                                        <a href="reports.php" class="text-xs text-center p-2 bg-gray-50 rounded hover:bg-gray-100 text-gray-600">
+                                            <i class="fas fa-file-alt block mb-1"></i> Reports
+                                        </a>
+                                        <a href="settings.php" class="text-xs text-center p-2 bg-gray-50 rounded hover:bg-gray-100 text-gray-600">
+                                            <i class="fas fa-cog block mb-1"></i> Settings
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Grid: Recent Activities & Top Merchants -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                        <!-- Recent Activities -->
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                                <h2 class="text-lg font-medium text-gray-900">Recent Activity</h2>
+                                <a href="activity-log.php" class="text-sm text-blue-600 hover:text-blue-900">View all</a>
+                            </div>
+                            <div class="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                                <?php if (empty($recentActivities)): ?>
+                                    <p class="p-6 text-gray-500 text-center">No recent activities found.</p>
+                                <?php else: ?>
+                                    <?php foreach (array_slice($recentActivities, 0, 8) as $activity): ?>
+                                        <div class="p-4 hover:bg-gray-50 transition-colors">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="flex-shrink-0">
+                                                    <span class="inline-flex items-center justify-center h-8 w-8 rounded-full <?php
+                                                        switch($activity['type']) {
+                                                            case 'order': echo 'bg-blue-100'; break;
+                                                            case 'customer': echo 'bg-green-100'; break;
+                                                            case 'merchant': echo 'bg-orange-100'; break;
+                                                            case 'product': echo 'bg-purple-100'; break;
+                                                            default: echo 'bg-gray-100';
+                                                        }
+                                                    ?>">
+                                                        <i class="fas <?php
+                                                            switch($activity['type']) {
+                                                                case 'order': echo 'fa-shopping-cart text-blue-600'; break;
+                                                                case 'customer': echo 'fa-user text-green-600'; break;
+                                                                case 'merchant': echo 'fa-store text-orange-600'; break;
+                                                                case 'product': echo 'fa-box text-purple-600'; break;
+                                                                default: echo 'fa-bell text-gray-600';
+                                                            }
+                                                        ?> text-xs"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <p class="text-sm font-medium text-gray-900 truncate">
+                                                        <?= htmlspecialchars($activity['description']) ?>
+                                                    </p>
+                                                    <p class="text-xs text-gray-500">
+                                                        <?= date('M j, g:i a', strtotime($activity['created_at'])) ?> · <?= htmlspecialchars($activity['user_email']) ?>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- Top Merchants -->
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                                <h2 class="text-lg font-medium text-gray-900">Top Merchants</h2>
+                                <a href="merchants.php" class="text-sm text-blue-600 hover:text-blue-900">View all</a>
+                            </div>
+                            <div class="divide-y divide-gray-200">
+                                <?php if (empty($topMerchants)): ?>
+                                    <p class="p-6 text-gray-500 text-center">No merchant data available.</p>
+                                <?php else: ?>
+                                    <?php foreach ($topMerchants as $index => $merchant): ?>
+                                        <div class="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <span class="text-gray-400 font-bold mr-3 w-4"><?= $index + 1 ?></span>
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-900">
+                                                        <?php
+                                                        $displayName = trim($merchant['first_name'] . ' ' . $merchant['last_name']);
+                                                        echo htmlspecialchars($displayName ?: $merchant['email']);
+                                                        ?>
+                                                    </p>
+                                                    <p class="text-xs text-gray-500"><?= number_format($merchant['order_count']) ?> orders · <?= number_format($merchant['active_products']) ?> products</p>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-sm font-bold text-gray-900">$<?= number_format($merchant['merchant_revenue'], 2) ?></p>
+                                                <a href="merchant-details.php?id=<?= $merchant['id'] ?>" class="text-xs text-blue-600 hover:underline">View</a>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
-
-                <?php if (empty($topMerchants)): ?>
-                    <p class="text-gray-500 text-center py-8">No merchant data available</p>
-                <?php else: ?>
-                    <div class="space-y-4">
-                        <?php foreach ($topMerchants as $index => $merchant): ?>
-                            <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center">
-                                        <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                                            <span class="text-green-600 font-semibold text-sm"><?= $index + 1 ?></span>
-                                        </div>
-                                        <div>
-                                            <p class="font-medium text-gray-900">
-                                                <?php
-                                                $displayName = trim($merchant['first_name'] . ' ' . $merchant['last_name']);
-                                                echo htmlspecialchars($displayName ?: $merchant['email']);
-                                                ?>
-                                            </p>
-                                            <p class="text-sm text-gray-500"><?= htmlspecialchars($merchant['email']) ?></p>
-                                        </div>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="font-semibold text-gray-900">$<?= number_format($merchant['merchant_revenue'], 2) ?></p>
-                                        <p class="text-xs text-gray-500">30-day revenue</p>
-                                    </div>
-                                </div>
-
-                                <div class="flex items-center justify-between text-sm text-gray-600 mb-3">
-                                    <div class="flex space-x-4">
-                                        <span><i class="fas fa-box text-blue-500 mr-1"></i><?= $merchant['product_count'] ?> products</span>
-                                        <span><i class="fas fa-check-circle text-green-500 mr-1"></i><?= $merchant['active_products'] ?> active</span>
-                                        <span><i class="fas fa-shopping-cart text-purple-500 mr-1"></i><?= $merchant['order_count'] ?> orders</span>
-                                    </div>
-                                    <?php if ($merchant['last_sale_date']): ?>
-                                        <span class="text-xs text-gray-500">
-                                            Last sale: <?= date('M j', strtotime($merchant['last_sale_date'])) ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="flex space-x-2">
-                                    <a href="merchant-store.php?id=<?= $merchant['id'] ?>"
-                                       class="flex-1 bg-blue-600 text-white text-center py-2 px-3 rounded-md text-sm hover:bg-blue-700 transition-colors">
-                                        <i class="fas fa-store mr-1"></i>View Store
-                                    </a>
-                                    <a href="user-details.php?id=<?= $merchant['id'] ?>"
-                                       class="flex-1 bg-green-600 text-white text-center py-2 px-3 rounded-md text-sm hover:bg-green-700 transition-colors">
-                                        <i class="fas fa-user mr-1"></i>View Details
-                                    </a>
-                                    <a href="merchant-sales.php?id=<?= $merchant['id'] ?>"
-                                       class="flex-1 bg-purple-600 text-white text-center py-2 px-3 rounded-md text-sm hover:bg-purple-700 transition-colors">
-                                        <i class="fas fa-chart-line mr-1"></i>Track Sales
-                                    </a>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-
-                    <div class="mt-6 text-center">
-                        <a href="reports.php?type=merchants" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                            <i class="fas fa-chart-bar mr-1"></i>View Merchant Analytics
-                        </a>
-                    </div>
-                <?php endif; ?>
             </div>
-        </div>
+        </main>
     </div>
 
     <script>
-        // Wait for DOM to be ready
         document.addEventListener('DOMContentLoaded', function() {
-            // Revenue Chart
             const canvas = document.getElementById('revenueChart');
-            if (!canvas) {
-                console.error('Revenue chart canvas not found');
-                return;
-            }
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                const revenueData = <?= json_encode($revenueData) ?>;
 
-            const ctx = canvas.getContext('2d');
-            const revenueData = <?= json_encode($revenueData) ?>;
-
-            console.log('Revenue data:', revenueData); // Debug log
-
-            if (!revenueData || revenueData.length === 0) {
-                // Show message if no data
-                const chartContainer = canvas.parentElement;
-                chartContainer.innerHTML = '<div class="flex items-center justify-center h-48 text-gray-500"><div class="text-center"><i class="fas fa-chart-line text-4xl mb-4"></i><p>No revenue data available</p><p class="text-sm">Data will appear when orders are placed</p></div></div>';
-                return;
-            }
-
-            try {
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: revenueData.map(item => {
-                            const date = new Date(item.order_date);
-                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        }),
-                        datasets: [{
-                            label: 'Daily Revenue',
-                            data: revenueData.map(item => parseFloat(item.daily_revenue) || 0),
-                            borderColor: 'rgb(59, 130, 246)',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            tension: 0.1,
-                            fill: true,
-                            pointBackgroundColor: 'rgb(59, 130, 246)',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            pointRadius: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return '$' + value.toFixed(2);
-                                    }
-                                },
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.1)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.1)'
-                                }
-                            }
+                if (revenueData && revenueData.length > 0) {
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: revenueData.map(item => {
+                                const date = new Date(item.order_date);
+                                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            }),
+                            datasets: [{
+                                label: 'Revenue',
+                                data: revenueData.map(item => parseFloat(item.daily_revenue) || 0),
+                                borderColor: 'rgb(59, 130, 246)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                fill: true,
+                                pointRadius: 0,
+                                pointHoverRadius: 4
+                            }]
                         },
-                        plugins: {
-                            legend: {
-                                display: false
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
                             },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return 'Revenue: $' + context.parsed.y.toFixed(2);
-                                    }
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: { borderDash: [2, 4], color: '#f3f4f6' },
+                                    ticks: { callback: value => '$' + value }
+                                },
+                                x: {
+                                    grid: { display: false }
                                 }
                             }
                         }
                     });
-                } catch (error) {
-                    console.error('Error creating chart:', error);
-                    const chartContainer = canvas.parentElement;
-                    chartContainer.innerHTML = '<div class="flex items-center justify-center h-48 text-red-500"><div class="text-center"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p>Error loading chart</p><p class="text-sm">Please refresh the page</p></div></div>';
                 }
-        });
-
-        // Activity filtering and interaction functions
-        function filterActivities(type) {
-            const items = document.querySelectorAll('.activity-item');
-            const buttons = document.querySelectorAll('.activity-filter-btn');
-
-            // Update button states
-            buttons.forEach(btn => {
-                btn.classList.remove('active', 'bg-blue-100', 'text-blue-800');
-                btn.classList.add('bg-gray-100', 'text-gray-600');
-            });
-
-            event.target.classList.remove('bg-gray-100', 'text-gray-600');
-            event.target.classList.add('active', 'bg-blue-100', 'text-blue-800');
-
-            // Filter items
-            items.forEach(item => {
-                if (type === 'all' || item.classList.contains(`activity-${type}`)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        }
-
-        function viewActivityDetails(type, id) {
-            let url = '';
-            switch(type) {
-                case 'order':
-                    url = `order-details.php?id=${id}`;
-                    break;
-                case 'customer':
-                    url = `user-details.php?id=${id}`;
-                    break;
-                case 'merchant':
-                    url = `merchant-details.php?id=${id}`;
-                    break;
-                case 'product':
-                    url = `product-details.php?id=${id}`;
-                    break;
-                default:
-                    return;
             }
-
-            // Open in modal or new window
-            window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
-        }
-
-        function showAllActivities() {
-            window.location.href = 'activity-log.php';
-        }
+        });
     </script>
-
-    <!-- Admin Footer -->
-    <footer class="bg-gray-800 text-white py-8 mt-16">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div>
-                    <h4 class="font-semibold mb-4">Content Management</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="contact-management.php" class="hover:text-white">Contact Information</a></li>
-                        <li><a href="shipping-info-management.php" class="hover:text-white">Shipping Information</a></li>
-                        <li><a href="returns-faq-management.php" class="hover:text-white">Returns & FAQ</a></li>
-                        <li><a href="global-shipping-admin.php" class="hover:text-white">Global Shipping</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">User Management</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="users.php" class="hover:text-white">Manage Users</a></li>
-                        <li><a href="merchants.php" class="hover:text-white">Merchant Applications</a></li>
-                        <li><a href="orders.php" class="hover:text-white">Order Management</a></li>
-                        <li><a href="products.php" class="hover:text-white">Product Management</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">System</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="settings.php" class="hover:text-white">Site Settings</a></li>
-                        <li><a href="reports.php" class="hover:text-white">Reports & Analytics</a></li>
-                        <li><a href="logs.php" class="hover:text-white">System Logs</a></li>
-                        <li><a href="backup.php" class="hover:text-white">Backup & Maintenance</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">Shipping & Geography</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="global-shipping-admin.php" class="hover:text-white">Shipping Management</a></li>
-                        <li><a href="shipping-info-management.php" class="hover:text-white">Geographic Settings</a></li>
-                        <li><a href="shipping-management.php" class="hover:text-white">Shipping Calculator</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">Supply Chain</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="suppliers.php" class="hover:text-white">Supplier Management</a></li>
-                        <li><a href="inventory.php" class="hover:text-white">Inventory Management</a></li>
-                        <li><a href="purchase-orders.php" class="hover:text-white">Purchase Orders</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">Financial Reporting</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="c-level-dashboard.php" class="hover:text-white">C-Level Dashboard</a></li>
-                        <li><a href="cash-flow-forecasting.php" class="hover:text-white">Cash Flow Forecasting</a></li>
-                        <li><a href="budget-vs-actual.php" class="hover:text-white">Budget vs Actual</a></li>
-                        <li><a href="unit-economics.php" class="hover:text-white">Unit Economics</a></li>
-                        <li><a href="growth-metrics.php" class="hover:text-white">Growth Metrics</a></li>
-                        <li><a href="risk-management.php" class="hover:text-white">Risk Management</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">Quick Links</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="../index.php" class="hover:text-white">View Store</a></li>
-                        <li><a href="../contact.php" class="hover:text-white">Customer Contact</a></li>
-                        <li><a href="../merchant/register.php" class="hover:text-white">Merchant Registration</a></li>
-                        <li><a href="../seller-guide.php" class="hover:text-white">Seller Guide</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-semibold mb-4">Engineering Module</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="../quote-request.php" class="hover:text-white">Request Quote</a></li>
-                        <li><a href="../sales-dashboard.php" class="hover:text-white">Sales Dashboard</a></li>
-                        <li><a href="../engineering-dashboard.php" class="hover:text-white">Engineering Tasks</a></li>
-                        <li><a href="../gantt-view.php" class="hover:text-white">Project Timeline</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                <p>&copy; 2024 VentDepot Admin Panel. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
 </body>
 </html>

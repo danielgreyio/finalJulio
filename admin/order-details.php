@@ -190,13 +190,13 @@ $items = $stmt->fetchAll();
                                     <?= htmlspecialchars($item['merchant_email']) ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    $<?= number_format($item['price'], 2) ?>
+                                    $<?= number_format($item['price_at_purchase'], 2) ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?= $item['quantity'] ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    $<?= number_format($item['price'] * $item['quantity'], 2) ?>
+                                    $<?= number_format($item['price_at_purchase'] * $item['quantity'], 2) ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -211,7 +211,7 @@ $items = $stmt->fetchAll();
             <div class="space-y-2">
                 <div class="flex justify-between">
                     <span class="text-gray-600">Subtotal:</span>
-                    <span class="text-gray-900">$<?= number_format(array_sum(array_map(function($item) { return $item['price'] * $item['quantity']; }, $items)), 2) ?></span>
+                    <span class="text-gray-900">$<?= number_format(array_sum(array_map(function($item) { return $item['price_at_purchase'] * $item['quantity']; }, $items)), 2) ?></span>
                 </div>
                 <?php if ($order['shipping_cost']): ?>
                 <div class="flex justify-between">

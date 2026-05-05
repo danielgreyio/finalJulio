@@ -34,6 +34,13 @@ function requireRole($role) {
     }
 }
 
+function requireLogin() {
+    if (!isLoggedIn()) {
+        header('Location: login.php');
+        exit;
+    }
+}
+
 function getCartCount() {
     return array_sum($_SESSION['cart'] ?? []);
 }

@@ -1,3 +1,10 @@
+<?php
+// Accounting Dashboard
+require_once '../config/database.php';
+
+// Require admin login
+requireRole('admin');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,205 +14,217 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <?php
-    // Accounting Dashboard
-    require_once '../config/database.php';
+<body class="bg-gray-50 h-screen flex overflow-hidden">
+    <!-- Sidebar -->
+    <?php include 'includes/sidebar.php'; ?>
 
-    // Require admin login
-    requireRole('admin');
-
-    include 'header.php';
-    ?>
-
-    <div class="container mx-auto px-4 py-8">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Accounting Dashboard</h1>
-            <button onclick="openAddTransactionModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Add Transaction
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-data="{ sidebarOpen: false }" class="relative z-0 flex-1 flex flex-col overflow-hidden">
+        <!-- Mobile Header -->
+        <div class="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white border-b border-gray-200">
+            <button @click="sidebarOpen = !sidebarOpen" class="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                <span class="sr-only">Open sidebar</span>
+                <i class="fas fa-bars"></i>
             </button>
         </div>
 
-        <!-- Financial Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Total Revenue -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="rounded-full bg-green-100 p-3">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-gray-500 text-sm font-medium">Total Revenue</h2>
-                        <p class="text-2xl font-bold text-gray-800" id="totalRevenue">$0.00</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Total Expenses -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="rounded-full bg-red-100 p-3">
-                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-gray-500 text-sm font-medium">Total Expenses</h2>
-                        <p class="text-2xl font-bold text-gray-800" id="totalExpenses">$0.00</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Accounts Receivable -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="rounded-full bg-blue-100 p-3">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-gray-500 text-sm font-medium">Accounts Receivable</h2>
-                        <p class="text-2xl font-bold text-gray-800" id="accountsReceivable">$0.00</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Accounts Payable -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="rounded-full bg-yellow-100 p-3">
-                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-4">
-                        <h2 class="text-gray-500 text-sm font-medium">Accounts Payable</h2>
-                        <p class="text-2xl font-bold text-gray-800" id="accountsPayable">$0.00</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Main Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Recent Transactions -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h2 class="text-lg font-semibold text-gray-800">Recent Transactions</h2>
-                </div>
-                <div class="p-6">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200" id="recentTransactions">
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading transactions...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <div class="py-6">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Accounting Dashboard</h1>
+                        <button onclick="openAddTransactionModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Add Transaction
+                        </button>
+                    </div>
+
+                    <!-- Financial Summary Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <!-- Total Revenue -->
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="rounded-full bg-green-100 p-3">
+                                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h2 class="text-gray-500 text-sm font-medium">Total Revenue</h2>
+                                    <p class="text-2xl font-bold text-gray-800" id="totalRevenue">$0.00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Total Expenses -->
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="rounded-full bg-red-100 p-3">
+                                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h2 class="text-gray-500 text-sm font-medium">Total Expenses</h2>
+                                    <p class="text-2xl font-bold text-gray-800" id="totalExpenses">$0.00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accounts Receivable -->
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="rounded-full bg-blue-100 p-3">
+                                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h2 class="text-gray-500 text-sm font-medium">Accounts Receivable</h2>
+                                    <p class="text-2xl font-bold text-gray-800" id="accountsReceivable">$0.00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accounts Payable -->
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="rounded-full bg-yellow-100 p-3">
+                                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h2 class="text-gray-500 text-sm font-medium">Accounts Payable</h2>
+                                    <p class="text-2xl font-bold text-gray-800" id="accountsPayable">$0.00</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Content -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- Recent Transactions -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h2 class="text-lg font-semibold text-gray-800">Recent Transactions</h2>
+                            </div>
+                            <div class="p-6">
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200" id="recentTransactions">
+                                            <tr>
+                                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading transactions...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accounts Overview -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h2 class="text-lg font-semibold text-gray-800">Chart of Accounts</h2>
+                            </div>
+                            <div class="p-6">
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200" id="chartOfAccounts">
+                                            <tr>
+                                                <td colspan="4" class="px-6 py-4 text-center text-gray-500">Loading accounts...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Financial Reports Section -->
+                    <div class="mt-8 bg-white rounded-lg shadow">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-lg font-semibold text-gray-800">Financial Reports</h2>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <button onclick="generateReport('income_statement')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg text-center">
+                                    <div class="font-medium">Income Statement</div>
+                                    <div class="text-sm opacity-90 mt-1">Revenue & Expenses</div>
+                                </button>
+                                <button onclick="generateReport('balance_sheet')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg text-center">
+                                    <div class="font-medium">Balance Sheet</div>
+                                    <div class="text-sm opacity-90 mt-1">Assets & Liabilities</div>
+                                </button>
+                                <button onclick="generateReport('cash_flow')" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-3 rounded-lg text-center">
+                                    <div class="font-medium">Cash Flow</div>
+                                    <div class="text-sm opacity-90 mt-1">Cash Movements</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- C-Level Financial Reporting -->
+                    <div class="mt-8 bg-white rounded-lg shadow">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h2 class="text-lg font-semibold text-gray-800">C-Level Financial Reporting</h2>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                <a href="c-level-dashboard.php" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 p-4 rounded-lg text-center transition duration-200">
+                                    <i class="fas fa-chart-bar text-2xl mb-2"></i>
+                                    <div class="font-medium text-sm">Executive Dashboard</div>
+                                </a>
+                                <a href="cash-flow-forecasting.php" class="bg-blue-100 hover:bg-blue-200 text-blue-800 p-4 rounded-lg text-center transition duration-200">
+                                    <i class="fas fa-chart-line text-2xl mb-2"></i>
+                                    <div class="font-medium text-sm">Cash Flow</div>
+                                </a>
+                                <a href="budget-vs-actual.php" class="bg-green-100 hover:bg-green-200 text-green-800 p-4 rounded-lg text-center transition duration-200">
+                                    <i class="fas fa-balance-scale text-2xl mb-2"></i>
+                                    <div class="font-medium text-sm">Budget vs Actual</div>
+                                </a>
+                                <a href="unit-economics.php" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 p-4 rounded-lg text-center transition duration-200">
+                                    <i class="fas fa-chart-pie text-2xl mb-2"></i>
+                                    <div class="font-medium text-sm">Unit Economics</div>
+                                </a>
+                                <a href="growth-metrics.php" class="bg-purple-100 hover:bg-purple-200 text-purple-800 p-4 rounded-lg text-center transition duration-200">
+                                    <i class="fas fa-arrow-up text-2xl mb-2"></i>
+                                    <div class="font-medium text-sm">Growth Metrics</div>
+                                </a>
+                                <a href="risk-management.php" class="bg-red-100 hover:bg-red-200 text-red-800 p-4 rounded-lg text-center transition duration-200">
+                                    <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                                    <div class="font-medium text-sm">Risk Management</div>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Accounts Overview -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h2 class="text-lg font-semibold text-gray-800">Chart of Accounts</h2>
-                </div>
-                <div class="p-6">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200" id="chartOfAccounts">
-                                <tr>
-                                    <td colspan="4" class="px-6 py-4 text-center text-gray-500">Loading accounts...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Financial Reports Section -->
-        <div class="mt-8 bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-800">Financial Reports</h2>
-            </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button onclick="generateReport('income_statement')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg text-center">
-                        <div class="font-medium">Income Statement</div>
-                        <div class="text-sm opacity-90 mt-1">Revenue & Expenses</div>
-                    </button>
-                    <button onclick="generateReport('balance_sheet')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg text-center">
-                        <div class="font-medium">Balance Sheet</div>
-                        <div class="text-sm opacity-90 mt-1">Assets & Liabilities</div>
-                    </button>
-                    <button onclick="generateReport('cash_flow')" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-3 rounded-lg text-center">
-                        <div class="font-medium">Cash Flow</div>
-                        <div class="text-sm opacity-90 mt-1">Cash Movements</div>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- C-Level Financial Reporting -->
-        <div class="mt-8 bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-800">C-Level Financial Reporting</h2>
-            </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    <a href="c-level-dashboard.php" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 p-4 rounded-lg text-center transition duration-200">
-                        <i class="fas fa-chart-bar text-2xl mb-2"></i>
-                        <div class="font-medium text-sm">Executive Dashboard</div>
-                    </a>
-                    <a href="cash-flow-forecasting.php" class="bg-blue-100 hover:bg-blue-200 text-blue-800 p-4 rounded-lg text-center transition duration-200">
-                        <i class="fas fa-chart-line text-2xl mb-2"></i>
-                        <div class="font-medium text-sm">Cash Flow</div>
-                    </a>
-                    <a href="budget-vs-actual.php" class="bg-green-100 hover:bg-green-200 text-green-800 p-4 rounded-lg text-center transition duration-200">
-                        <i class="fas fa-balance-scale text-2xl mb-2"></i>
-                        <div class="font-medium text-sm">Budget vs Actual</div>
-                    </a>
-                    <a href="unit-economics.php" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 p-4 rounded-lg text-center transition duration-200">
-                        <i class="fas fa-chart-pie text-2xl mb-2"></i>
-                        <div class="font-medium text-sm">Unit Economics</div>
-                    </a>
-                    <a href="growth-metrics.php" class="bg-purple-100 hover:bg-purple-200 text-purple-800 p-4 rounded-lg text-center transition duration-200">
-                        <i class="fas fa-arrow-up text-2xl mb-2"></i>
-                        <div class="font-medium text-sm">Growth Metrics</div>
-                    </a>
-                    <a href="risk-management.php" class="bg-red-100 hover:bg-red-200 text-red-800 p-4 rounded-lg text-center transition duration-200">
-                        <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                        <div class="font-medium text-sm">Risk Management</div>
-                    </a>
-                </div>
-            </div>
-        </div>
+        </main>
     </div>
 
     <!-- Add Transaction Modal -->
@@ -277,12 +296,25 @@
 
     // Load dashboard summary data
     function loadDashboardData() {
-        // In a real implementation, this would fetch actual data from the API
-        // For now, we'll use placeholder data
-        document.getElementById('totalRevenue').textContent = '$25,480.00';
-        document.getElementById('totalExpenses').textContent = '$12,350.00';
-        document.getElementById('accountsReceivable').textContent = '$8,750.00';
-        document.getElementById('accountsPayable').textContent = '$4,200.00';
+        fetch('api/accounting-api.php?action=get_dashboard_summary')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const formatCurrency = (amount) => {
+                        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+                    };
+                    
+                    document.getElementById('totalRevenue').textContent = formatCurrency(data.data.totalRevenue);
+                    document.getElementById('totalExpenses').textContent = formatCurrency(data.data.totalExpenses);
+                    document.getElementById('accountsReceivable').textContent = formatCurrency(data.data.accountsReceivable);
+                    document.getElementById('accountsPayable').textContent = formatCurrency(data.data.accountsPayable);
+                } else {
+                    console.error('Failed to load dashboard data:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading dashboard data:', error);
+            });
     }
 
     // Load chart of accounts
@@ -447,45 +479,5 @@
             });
     }
     </script>
-
-    <footer class="bg-gray-800 text-white mt-12">
-        <div class="max-w-7xl mx-auto px-4 py-8">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div>
-                    <h3 class="text-lg font-semibold mb-4">VentDepot Admin</h3>
-                    <p class="text-gray-400">Advanced e-commerce platform administration panel.</p>
-                </div>
-                <div>
-                    <h4 class="text-md font-semibold mb-4">Navigation</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="dashboard.php" class="hover:text-white">Dashboard</a></li>
-                        <li><a href="users.php" class="hover:text-white">Users</a></li>
-                        <li><a href="orders.php" class="hover:text-white">Orders</a></li>
-                        <li><a href="products.php" class="hover:text-white">Products</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="text-md font-semibold mb-4">Modules</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="global-shipping-admin.php" class="hover:text-white">Shipping</a></li>
-                        <li><a href="seo-management.php" class="hover:text-white">SEO</a></li>
-                        <li><a href="pricing-management.php" class="hover:text-white">Pricing</a></li>
-                        <li><a href="accounting-dashboard.php" class="hover:text-white">Accounting</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="text-md font-semibold mb-4">Support</h4>
-                    <ul class="space-y-2 text-gray-400">
-                        <li><a href="../contact-support.php" class="hover:text-white">Help Center</a></li>
-                        <li><a href="../faq.php" class="hover:text-white">FAQs</a></li>
-                        <li><a href="../contact.php" class="hover:text-white">Contact</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                <p>&copy; 2024 VentDepot Admin Panel. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
 </body>
 </html>

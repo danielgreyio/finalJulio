@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Insert product
         $stmt = $pdo->prepare("
-            INSERT INTO products (merchant_id, name, description, price, category, stock, image_url,
+            INSERT INTO products (merchant_id, name, description, price, category, inventory, image_url,
                                 meta_title, meta_description, meta_keywords,
                                 og_title, og_description, og_image,
                                 twitter_title, twitter_description, twitter_image) 

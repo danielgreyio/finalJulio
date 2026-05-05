@@ -1,5 +1,5 @@
 <?php
-require_once '../config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 header('Content-Type: application/json');
 
@@ -23,15 +23,67 @@ $action = $input['action'] ?? '';
 $productId = intval($input['product_id'] ?? 0);
 $quantity = intval($input['quantity'] ?? 1);
 
-// Validate product exists
+// Helper function to get product from DB
+function getProductFromDB($pdo, $id) {
+    $stmt = $pdo->prepare("
+        SELECT p.* 
+        FROM products p 
+        WHERE p.id = ?
+    ");
+    $stmt->execute([$id]);
+    $product = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($product) {
+        // Map DB columns to expected keys if necessary
+        $product['stock'] = $product['inventory']; // Use 'inventory' column from schema
+        
+        // Ensure image_url has a fallback
+        if (empty($product['image_url'])) {
+            $product['image_url'] = 'assets/images/placeholder.jpg'; // Default placeholder
+        }
+    }
+    
+    return $product;
+}
+
+// Helper to calculate total from DB prices
+function getCartTotalFromDB($pdo) {
+    if (empty($_SESSION['cart'])) return 0;
+    
+    $total = 0;
+    $ids = array_keys($_SESSION['cart']);
+    
+    if (empty($ids)) return 0;
+    
+    $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+    $sql = "SELECT id, price FROM products WHERE id IN ($placeholders)";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($ids);
+    $products = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // [id => price]
+    
+    foreach ($_SESSION['cart'] as $id => $qty) {
+        if (isset($products[$id])) {
+            $total += $products[$id] * $qty;
+        }
+    }
+    
+    return $total;
+}
+
+
+
+// Validate product exists logic
+$product = null;
 if ($productId > 0) {
-    $stmt = $pdo->prepare("SELECT id, name, price, stock FROM products WHERE id = ?");
-    $stmt->execute([$productId]);
-    $product = $stmt->fetch();
+    $product = getProductFromDB($pdo, $productId);
     
     if (!$product) {
-        echo json_encode(['success' => false, 'message' => 'Product not found']);
-        exit;
+        // If action is remove or clear, we might not need the product to exist, but for 'add'/'update' we do.
+        // For 'get', we skip this check in the loop.
+        if ($action === 'add' || $action === 'update') {
+            echo json_encode(['success' => false, 'message' => 'Product not found']);
+            exit;
+        }
     }
 }
 
@@ -42,8 +94,20 @@ switch ($action) {
             exit;
         }
         
+        // Helper function fallback for session manipulation
+        if (!function_exists('addToCart')) {
+            function addToCart($id, $qty) {
+                if (!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
+                if (isset($_SESSION['cart'][$id])) {
+                    $_SESSION['cart'][$id] += $qty;
+                } else {
+                    $_SESSION['cart'][$id] = $qty;
+                }
+            }
+        }
+        
         // Check stock availability
-        $currentCart = getCartItems();
+        $currentCart = $_SESSION['cart'] ?? [];
         $currentQuantity = $currentCart[$productId] ?? 0;
         $newQuantity = $currentQuantity + $quantity;
         
@@ -57,11 +121,15 @@ switch ($action) {
         
         addToCart($productId, $quantity);
         
+        // Update session totals
+        $_SESSION['cart_count'] = getCartCount();
+        $_SESSION['cart_total'] = getCartTotalFromDB($pdo);
+
         echo json_encode([
             'success' => true,
             'message' => 'Product added to cart',
-            'cart_count' => getCartCount(),
-            'cart_total' => getCartTotal($pdo)
+            'cart_count' => $_SESSION['cart_count'],
+            'cart_total' => $_SESSION['cart_total']
         ]);
         break;
         
@@ -72,9 +140,11 @@ switch ($action) {
         }
         
         if ($quantity === 0) {
-            removeFromCart($productId);
+            if (isset($_SESSION['cart'][$productId])) {
+                unset($_SESSION['cart'][$productId]);
+            }
         } else {
-            // Check stock availability
+            // Check stock
             if ($quantity > $product['stock']) {
                 echo json_encode([
                     'success' => false, 
@@ -86,11 +156,14 @@ switch ($action) {
             $_SESSION['cart'][$productId] = $quantity;
         }
         
+        $_SESSION['cart_count'] = getCartCount();
+        $_SESSION['cart_total'] = getCartTotalFromDB($pdo);
+
         echo json_encode([
             'success' => true,
             'message' => 'Cart updated',
-            'cart_count' => getCartCount(),
-            'cart_total' => getCartTotal($pdo)
+            'cart_count' => $_SESSION['cart_count'],
+            'cart_total' => $_SESSION['cart_total']
         ]);
         break;
         
@@ -100,18 +173,25 @@ switch ($action) {
             exit;
         }
         
-        removeFromCart($productId);
+        if (isset($_SESSION['cart'][$productId])) {
+            unset($_SESSION['cart'][$productId]);
+        }
         
+        $_SESSION['cart_count'] = getCartCount();
+        $_SESSION['cart_total'] = getCartTotalFromDB($pdo);
+
         echo json_encode([
             'success' => true,
             'message' => 'Product removed from cart',
-            'cart_count' => getCartCount(),
-            'cart_total' => getCartTotal($pdo)
+            'cart_count' => $_SESSION['cart_count'],
+            'cart_total' => $_SESSION['cart_total']
         ]);
         break;
         
     case 'clear':
         $_SESSION['cart'] = [];
+        $_SESSION['cart_count'] = 0;
+        $_SESSION['cart_total'] = 0;
         
         echo json_encode([
             'success' => true,
@@ -122,41 +202,60 @@ switch ($action) {
         break;
         
     case 'get':
-        $cart = getCartItems();
+        $cart = $_SESSION['cart'] ?? [];
         $cartDetails = [];
         
         if (!empty($cart)) {
-            $productIds = array_keys($cart);
-            $placeholders = str_repeat('?,', count($productIds) - 1) . '?';
+            $ids = array_keys($cart);
+            $placeholders = str_repeat('?,', count($ids) - 1) . '?';
             
-            $stmt = $pdo->prepare("SELECT id, name, price, image_url, stock FROM products WHERE id IN ($placeholders)");
-            $stmt->execute($productIds);
-            $products = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+            // Fetch all cart products in one query
+            $stmt = $pdo->prepare("
+                SELECT p.* 
+                FROM products p 
+                WHERE p.id IN ($placeholders)
+            ");
+            $stmt->execute($ids);
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            foreach ($cart as $productId => $quantity) {
-                if (isset($products[$productId])) {
-                    $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
-                    $stmt->execute([$productId]);
-                    $product = $stmt->fetch();
+            // Re-map by ID for easy access
+            $productMap = [];
+            foreach ($products as $p) {
+                $productMap[$p['id']] = $p;
+            }
+            
+            foreach ($cart as $id => $qty) {
+                if (isset($productMap[$id])) {
+                    $p = $productMap[$id];
+                    // Handle image fallback
+                    $img = !empty($p['image_url']) ? $p['image_url'] : 'assets/images/placeholder.jpg';
                     
                     $cartDetails[] = [
-                        'product_id' => $productId,
-                        'name' => $product['name'],
-                        'price' => $product['price'],
-                        'image_url' => $product['image_url'],
-                        'quantity' => $quantity,
-                        'subtotal' => $product['price'] * $quantity,
-                        'stock' => $product['stock']
+                        'product_id' => $id,
+                        'name' => $p['name'],
+                        'price' => $p['price'],
+                        'image_url' => $img,
+                        'quantity' => $qty,
+                        'subtotal' => $p['price'] * $qty,
+                        'stock' => $p['inventory']
                     ];
                 }
             }
         }
         
+        // Recalculate total just in case
+        $total = 0;
+        foreach ($cartDetails as $item) {
+            $total += $item['subtotal'];
+        }
+        $_SESSION['cart_total'] = $total;
+        $_SESSION['cart_count'] = getCartCount();
+        
         echo json_encode([
             'success' => true,
             'cart' => $cartDetails,
-            'cart_count' => getCartCount(),
-            'cart_total' => getCartTotal($pdo)
+            'cart_count' => $_SESSION['cart_count'],
+            'cart_total' => $_SESSION['cart_total']
         ]);
         break;
         
@@ -164,4 +263,3 @@ switch ($action) {
         echo json_encode(['success' => false, 'message' => 'Invalid action']);
         break;
 }
-?>
