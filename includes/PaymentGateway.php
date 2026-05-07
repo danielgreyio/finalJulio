@@ -80,25 +80,25 @@ class PaymentGateway {
                 'error' => $e->getMessage()
             ], 'error');
             
+            error_log('Payment exception: ' . $e->getMessage() . ' (order ' . $orderId . ')');
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => 'Payment processing failed. Your card has not been charged.',
             ];
         }
     }
-    
+
     /**
      * Record payment transaction
      */
     private function recordTransaction($orderId, $paymentMethod, $result) {
         $stmt = $this->pdo->prepare("
             INSERT INTO payment_transactions (
-                order_id, payment_method, gateway_reference, amount, 
-                platform_fee, gateway_fee, net_amount, status, 
-                raw_response, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, NOW())
+                order_id, payment_method, gateway_reference, amount,
+                platform_fee, gateway_fee, net_amount, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', NOW())
         ");
-        
+
         $stmt->execute([
             $orderId,
             $paymentMethod,
@@ -107,7 +107,6 @@ class PaymentGateway {
             $result['platform_fee'],
             $result['gateway_fee'],
             $result['net_amount'],
-            $result['raw_response']
         ]);
         
         return $this->pdo->lastInsertId();

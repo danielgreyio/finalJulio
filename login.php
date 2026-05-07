@@ -77,11 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 
                 // Validate redirect URL
-                $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                    $redirect = 'index.php';
-                }
-                
+                $redirect = Security::validateRedirect($redirect);
                 header("Location: $redirect");
                 exit;
             }
@@ -140,11 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'role' => $user['role']
                             ]);
 
-                            $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                            if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                                $redirect = 'index.php';
-                            }
-
+                            $redirect = Security::validateRedirect($redirect);
                             header("Location: $redirect");
                             exit;
                         } else {
@@ -172,11 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'role' => $user['role']
                         ]);
 
-                        $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                        if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                            $redirect = 'index.php';
-                        }
-
+                        $redirect = Security::validateRedirect($redirect);
                         header("Location: $redirect");
                         exit;
                     }
@@ -339,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         
                         <div class="text-sm">
-                            <a href="#" class="font-medium text-blue-600 hover:text-blue-500">
+                            <a href="forgot-password.php" class="font-medium text-blue-600 hover:text-blue-500">
                                 Forgot your password?
                             </a>
                         </div>
@@ -381,6 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
             
+            <?php if (env('APP_ENV') !== 'production'): ?>
             <!-- Demo Accounts -->
             <div class="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                 <h3 class="text-sm font-medium text-yellow-800 mb-2">Demo Accounts</h3>
@@ -390,6 +379,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <p><strong>Admin:</strong> admin@demo.com / password123</p>
                 </div>
             </div>
+            <?php endif; ?>
             
             <!-- Footer Links -->
             <div class="text-center text-sm text-gray-600">

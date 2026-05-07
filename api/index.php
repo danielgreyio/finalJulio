@@ -20,9 +20,12 @@ class VentDepotAPI {
         $this->pdo = $pdo;
         
         header("Content-Type: application/json");
-        header("Access-Control-Allow-Origin: *");
+        $allowedOrigin = rtrim(env('APP_URL', ''), '/');
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        header("Access-Control-Allow-Origin: " . ($origin === $allowedOrigin ? $origin : $allowedOrigin));
         header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-        header("Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key");
+        header("Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key, X-CSRF-Token");
+        header("Access-Control-Allow-Credentials: false");
         
         // Handle preflight requests
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -177,7 +180,7 @@ class VentDepotAPI {
             $expectedSignature = base64_encode(hash_hmac(
                 'sha256',
                 $parts[0] . '.' . $parts[1],
-                $_ENV['JWT_SECRET'] ?? 'default_secret',
+                $_ENV['JWT_SECRET'] ?? (static function() { throw new \RuntimeException('JWT_SECRET not set in .env'); })(),
                 true
             ));
             
@@ -329,7 +332,7 @@ class VentDepotAPI {
         $signature = base64_encode(hash_hmac(
             'sha256',
             $headerEncoded . '.' . $payloadEncoded,
-            $_ENV['JWT_SECRET'] ?? 'default_secret',
+            $_ENV['JWT_SECRET'] ?? (static function() { throw new \RuntimeException('JWT_SECRET not set in .env'); })(),
             true
         ));
         

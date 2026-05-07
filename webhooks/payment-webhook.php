@@ -119,10 +119,23 @@ class WebhookHandler {
     private function processPayPalWebhook() {
         $payload = @file_get_contents('php://input');
         $headers = getallheaders();
-        
-        // Verify PayPal webhook (simplified - you'd need proper verification)
+
+        // TODO: Implement full PayPal webhook signature verification.
+        // PayPal sends PAYPAL-CERT-URL, PAYPAL-TRANSMISSION-ID, PAYPAL-TRANSMISSION-TIME,
+        // PAYPAL-TRANSMISSION-SIG, and PAYPAL-AUTH-ALGO headers. Use these to call
+        // POST /v1/notifications/verify-webhook-signature via the PayPal SDK or REST API.
+        // See: https://developer.paypal.com/docs/api/webhooks/v1/#verify-webhook-signature
+        //
+        // Until verification is wired in, we log and acknowledge but take no further action.
+        $webhookId = $_ENV['PAYPAL_WEBHOOK_ID'] ?? '';
+        if (empty($webhookId)) {
+            error_log('PayPal webhook received but PAYPAL_WEBHOOK_ID not configured — skipping processing');
+            http_response_code(200);
+            return ['success' => true, 'message' => 'acknowledged'];
+        }
+
         $event = json_decode($payload, true);
-        
+
         if (!$event) {
             return ['success' => false, 'error' => 'Invalid JSON'];
         }

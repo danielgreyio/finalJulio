@@ -73,8 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (empty($validationErrors)) {
                 try {
-                    // Generate unique filename
-                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                    // Derive extension from detected MIME type, not user-supplied filename
+                    $mimeToExt = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+                    $detectedMime = mime_content_type($file['tmp_name']);
+                    $extension = $mimeToExt[$detectedMime] ?? null;
+                    if (!$extension) {
+                        throw new \Exception('Invalid image type detected.');
+                    }
                     $filename = uniqid() . '_' . time() . '.' . $extension;
                     $uploadDir = 'uploads/images/';
                     $uploadPath = '../' . $uploadDir;

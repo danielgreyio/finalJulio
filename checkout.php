@@ -103,6 +103,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             try {
                 $pdo->beginTransaction();
 
+                // Validate and lock stock before creating order
+                foreach ($cartItems as $item) {
+                    $stockStmt = $pdo->prepare("SELECT id, stock FROM products WHERE id = ? AND status = 'active' FOR UPDATE");
+                    $stockStmt->execute([$item['product_id']]);
+                    $p = $stockStmt->fetch();
+                    if (!$p || $p['stock'] < $item['quantity']) {
+                        throw new Exception("Insufficient stock for product {$item['product_id']}");
+                    }
+                }
+
                 $stmt = $pdo->prepare("
                     INSERT INTO orders (customer_id, total_amount, shipping_cost, tax_amount,
                                        shipping_carrier, shipping_service, destination_postal,
@@ -114,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $selectedCarrier, $selectedService, $destinationPostal,
                 ]);
                 $orderId = $pdo->lastInsertId();
-                
+
                 // Add order items
                 foreach ($cartItems as $item) {
                     $stmt = $pdo->prepare("
@@ -122,6 +132,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         VALUES (?, ?, ?, ?)
                     ");
                     $stmt->execute([$orderId, $item['product_id'], $item['quantity'], $item['price']]);
+                }
+
+                // Decrement stock atomically
+                foreach ($cartItems as $item) {
+                    $pdo->prepare("UPDATE products SET stock = stock - ? WHERE id = ?")->execute([$item['quantity'], $item['product_id']]);
                 }
                 
                 // If credit was applied, reserve it
@@ -188,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     <!-- PayPal SDK -->
     <?php if ($paymentConfig['paypal']['enabled']): ?>
-    <script src="https://www.paypal.com/sdk/js?client-id=<?= $paymentConfig['paypal']['client_id'] ?>&currency=USD"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=<?= htmlspecialchars($paymentConfig['paypal']['client_id'], ENT_QUOTES, 'UTF-8') ?>&currency=USD"></script>
     <?php endif; ?>
 </head>
 <body class="bg-gray-50">
@@ -399,7 +414,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         <?php if ($paymentConfig['stripe']['enabled'] && $orderId > 0): ?>
         // Initialize Stripe
-        const stripe = Stripe('<?= $paymentConfig['stripe']['publishable_key'] ?>');
+        const stripe = Stripe(<?= json_encode($paymentConfig['stripe']['publishable_key']) ?>);
         const elements = stripe.elements();
         
         const cardElement = elements.create('card', {

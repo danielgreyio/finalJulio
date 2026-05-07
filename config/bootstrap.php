@@ -33,6 +33,15 @@ if (file_exists($autoload)) {
 
 // ── Session ───────────────────────────────────────────────────────────────────
 if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => !empty($_SERVER['HTTPS']),
+        'httponly' => true,
+        'samesite' => 'Strict',
+    ]);
+    ini_set('session.use_strict_mode', 1);
+    ini_set('session.gc_maxlifetime', 3600);
     session_start();
 }
 
@@ -88,6 +97,20 @@ if (!function_exists('requireCSRF')) {
 if (!function_exists('generateCSRFInput')) {
     function generateCSRFInput(): string {
         return Security::getCSRFInput();
+    }
+}
+
+// ── Global CSRF enforcement ───────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $path   = $_SERVER['PHP_SELF'] ?? '';
+    $bypass = strpos($path, 'webhook') !== false || strpos($path, '/api/') !== false;
+    if (!$bypass) {
+        $submitted = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (!Security::validateCSRFToken($submitted)) {
+            Security::logSecurityEvent('csrf_validation_failed', ['uri' => $path]);
+            http_response_code(403);
+            die('CSRF validation failed. Please go back and try again.');
+        }
     }
 }
 

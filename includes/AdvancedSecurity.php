@@ -11,7 +11,11 @@ class AdvancedSecurity {
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
-        $this->encryptionKey = $_ENV['ENCRYPTION_KEY'] ?? md5('default_encryption_key');
+        $key = $_ENV['ENCRYPTION_KEY'] ?? '';
+        if (strlen($key) < 32) {
+            throw new \RuntimeException('ENCRYPTION_KEY must be set in .env (min 32 chars). Run: openssl rand -hex 32');
+        }
+        $this->encryptionKey = $key;
     }
     
     /**

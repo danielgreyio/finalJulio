@@ -4,11 +4,6 @@ session_start();
 require_once 'config/database.php';
 require_once 'includes/security.php';
 
-// CSRF validation temporarily disabled
-// if ($_SERVER['REQUEST_METHOD'] === 'POST' && !Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
-//     die('CSRF token mismatch');
-// }
-
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -23,20 +18,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $specifications = $_POST['specifications'] ?? '';
     $quantity = $_POST['quantity'] ?? 1;
     $timeline = $_POST['timeline'] ?? '';
-    
+
     // Handle file upload
     $specifications_file = null;
+    $fileError = null;
     if (isset($_FILES['specifications_file']) && $_FILES['specifications_file']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = 'uploads/specifications/';
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0755, true);
-        }
-        
-        $file_name = uniqid() . '_' . basename($_FILES['specifications_file']['name']);
-        $target_file = $upload_dir . $file_name;
-        
-        if (move_uploaded_file($_FILES['specifications_file']['tmp_name'], $target_file)) {
-            $specifications_file = $target_file;
+        $allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'dwg', 'dxf', 'png', 'jpg', 'jpeg'];
+        $ext = strtolower(pathinfo($_FILES['specifications_file']['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowedExtensions, true)) {
+            $fileError = 'File type not allowed. Accepted: PDF, DOC, XLS, DWG, DXF, images.';
+        } else {
+            $upload_dir = 'uploads/specifications/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            $file_name = uniqid() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+            $target_file = $upload_dir . $file_name;
+            if (move_uploaded_file($_FILES['specifications_file']['tmp_name'], $target_file)) {
+                $specifications_file = $target_file;
+            }
         }
     }
     

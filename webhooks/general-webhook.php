@@ -208,7 +208,7 @@ class GeneralWebhookHandler {
             $verifyToken = $_ENV['FACEBOOK_VERIFY_TOKEN'] ?? '';
             
             if ($_GET['hub_verify_token'] === $verifyToken) {
-                echo $_GET['hub_challenge'];
+                echo intval($_GET['hub_challenge']);
                 exit;
             } else {
                 http_response_code(403);

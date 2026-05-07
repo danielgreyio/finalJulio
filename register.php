@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$sanitizedData['email']]);
             
             if ($stmt->fetch()) {
-                $error = 'An account with this email already exists.';
+                $error = 'Registration could not be completed. Please check your details or try a different email.';
             } else {
                 // Create new user
                 $hashedPassword = Security::hashPassword($sanitizedData['password']);
