@@ -311,6 +311,42 @@ class Security {
     }
     
     /**
+     * Validate a redirect URL against an exact whitelist.
+     * Returns the URL if allowed, or 'index.php' as the safe fallback.
+     */
+    public static function validateRedirect(string $url, array $whitelist = []): string
+    {
+        $default = 'index.php';
+
+        if ($url === '' || $url === 'null') {
+            return $default;
+        }
+
+        // Reject null bytes
+        if (strpos($url, "\0") !== false) {
+            return $default;
+        }
+
+        // Reject URL-encoded traversal sequences
+        $decoded = urldecode($url);
+        if (strpos($decoded, '..') !== false) {
+            return $default;
+        }
+
+        // Reject protocol-relative and absolute URLs
+        if (preg_match('#^(https?:)?//#i', $url)) {
+            return $default;
+        }
+
+        // Use default whitelist if none provided
+        if (empty($whitelist)) {
+            $whitelist = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
+        }
+
+        return in_array($url, $whitelist, true) ? $url : $default;
+    }
+
+    /**
      * Validate file upload
      */
     public static function validateFileUpload($file, $allowedTypes = [], $maxSize = 5242880) { // 5MB default

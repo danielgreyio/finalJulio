@@ -1,8 +1,6 @@
 <?php
 require_once 'config/database.php';
-require_once 'includes/security.php';
-// Temporarily comment out 2FA until tables are set up
-// require_once 'includes/TwoFactorAuth.php';
+require_once 'includes/TwoFactorAuth.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -12,8 +10,7 @@ if (isLoggedIn()) {
 
 $error = '';
 $redirect = Security::sanitizeInput($_GET['redirect'] ?? 'index.php', 'string');
-// Temporarily comment out 2FA initialization
-// $twoFA = new TwoFactorAuth($pdo);
+$twoFA = new TwoFactorAuth($pdo);
 $show2FAForm = false;
 $pendingUserId = null;
 
@@ -24,11 +21,11 @@ if (isset($_SESSION['pending_2fa_user_id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF Protection temporarily disabled
-    // if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
-    //     Security::logSecurityEvent('csrf_token_mismatch', ['page' => 'login']);
-    //     die('CSRF token mismatch');
-    // }
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        Security::logSecurityEvent('csrf_token_mismatch', ['page' => 'login']);
+        http_response_code(403);
+        die('Invalid request. Please go back and try again.');
+    }
     
     // Check if this is 2FA verification
     if (isset($_POST['verify_2fa']) && $pendingUserId) {
@@ -80,11 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 
                 // Validate redirect URL
-                $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                    $redirect = 'index.php';
-                }
-                
+                $redirect = Security::validateRedirect($redirect);
                 header("Location: $redirect");
                 exit;
             }
@@ -133,20 +126,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_email'] = $user['email'];
                 $_SESSION['user_role'] = $user['role'];
                 
-                // Regenerate session ID for security
-                session_regenerate_id(true);
-                
-                // Log successful login
-                Security::logSecurityEvent('user_login_success', [
-                    'user_id' => $user['id'],
-                    'email' => $user['email'],
-                    'role' => $user['role']
-                ]);
-                
-                // Validate redirect URL to prevent open redirects
-                $allowedRedirects = ['index.php', 'merchant/dashboard.php', 'admin/dashboard.php', 'profile.php', 'cart.php'];
-                if (!in_array($redirect, $allowedRedirects) && !preg_match('/^[a-zA-Z0-9\/\._-]+\.php$/', $redirect)) {
-                    $redirect = 'index.php';
+                if ($user && Security::verifyPassword($password, $user['password'])) {
+                    // Check if 2FA is enabled
+                    if ($twoFA->isEnabled($user['id'])) {
+                        // Check if device is trusted
+                        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                        $ipAddress = Security::getClientIP();
+
+                        if ($twoFA->isTrustedDevice($user['id'], $userAgent, $ipAddress)) {
+                            // Skip 2FA for trusted device
+                            $_SESSION['user_id'] = $user['id'];
+                            $_SESSION['user_email'] = $user['email'];
+                            $_SESSION['user_role'] = $user['role'];
+
+                            session_regenerate_id(true);
+
+                            Security::logSecurityEvent('user_login_success_trusted_device', [
+                                'user_id' => $user['id'],
+                                'email' => $user['email'],
+                                'role' => $user['role']
+                            ]);
+
+                            $redirect = Security::validateRedirect($redirect);
+                            header("Location: $redirect");
+                            exit;
+                        } else {
+                            // Require 2FA verification
+                            $_SESSION['pending_2fa_user_id'] = $user['id'];
+                            $show2FAForm = true;
+                            $pendingUserId = $user['id'];
+
+                            Security::logSecurityEvent('2fa_required', [
+                                'user_id' => $user['id'],
+                                'email' => $user['email']
+                            ]);
+                        }
+                    } else {
+                        // Login successful without 2FA
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['user_email'] = $user['email'];
+                        $_SESSION['user_role'] = $user['role'];
+
+                        session_regenerate_id(true);
+
+                        Security::logSecurityEvent('user_login_success', [
+                            'user_id' => $user['id'],
+                            'email' => $user['email'],
+                            'role' => $user['role']
+                        ]);
+
+                        $redirect = Security::validateRedirect($redirect);
+                        header("Location: $redirect");
+                        exit;
+                    }
+                } else {
+                    $error = 'Invalid email or password.';
+                    Security::logSecurityEvent('login_failed', [
+                        'attempted_email' => $email,
+                        'ip' => Security::getClientIP()
+                    ], 'warning');
                 }
                 
                 header("Location: $redirect");
@@ -310,7 +348,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         
                         <div class="text-sm">
-                            <a href="#" class="font-medium text-blue-600 hover:text-blue-500">
+                            <a href="forgot-password.php" class="font-medium text-blue-600 hover:text-blue-500">
                                 Forgot your password?
                             </a>
                         </div>
@@ -352,6 +390,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
             
+            <?php if (env('APP_ENV') !== 'production'): ?>
             <!-- Demo Accounts -->
             <div class="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                 <h3 class="text-sm font-medium text-yellow-800 mb-2">Demo Accounts</h3>
@@ -361,6 +400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <p><strong>Admin:</strong> admin@demo.com / password123</p>
                 </div>
             </div>
+            <?php endif; ?>
             
             <!-- Footer Links -->
             <div class="text-center text-sm text-gray-600">

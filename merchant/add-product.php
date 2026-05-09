@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $price = floatval($_POST['price'] ?? 0);
+    $unitOfMeasure = trim($_POST['unit_of_measure'] ?? 'pieza');
     $category = trim($_POST['custom_category'] ?? $_POST['category'] ?? '');
     $stock = intval($_POST['stock'] ?? 0);
     $imageUrl = trim($_POST['image_url'] ?? '');
@@ -37,14 +38,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Insert product
         $stmt = $pdo->prepare("
-            INSERT INTO products (merchant_id, name, description, price, category, inventory, image_url,
+            INSERT INTO products (merchant_id, name, description, price, unit_of_measure, category, stock, image_url,
                                 meta_title, meta_description, meta_keywords,
                                 og_title, og_description, og_image,
-                                twitter_title, twitter_description, twitter_image) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                twitter_title, twitter_description, twitter_image)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        
-        if ($stmt->execute([$_SESSION['user_id'], $name, $description, $price, $category, $stock, $imageUrl,
+
+        if ($stmt->execute([$_SESSION['user_id'], $name, $description, $price, $unitOfMeasure, $category, $stock, $imageUrl,
                            $metaTitle, $metaDescription, $metaKeywords,
                            $ogTitle, $ogDescription, $ogImage,
                            $twitterTitle, $twitterDescription, $twitterImage])) {
@@ -65,6 +66,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
 
             $shippingCalc->updateProductDimensions($productId, $dimensions);
+
+            // Save bulk pricing tiers
+            $tierQtys   = $_POST['tier_qty']   ?? [];
+            $tierPrices = $_POST['tier_price']  ?? [];
+            foreach ($tierQtys as $i => $qty) {
+                $qty   = intval($qty);
+                $tprice = floatval($tierPrices[$i] ?? 0);
+                if ($qty > 0 && $tprice > 0) {
+                    $tierStmt = $pdo->prepare("
+                        INSERT INTO product_pricing_tiers (product_id, min_quantity, price_per_unit)
+                        VALUES (?, ?, ?)
+                        ON DUPLICATE KEY UPDATE price_per_unit = VALUES(price_per_unit)
+                    ");
+                    $tierStmt->execute([$productId, $qty, $tprice]);
+                }
+            }
 
             $success = 'Product added successfully! <a href="../product.php?id=' . $productId . '" class="text-blue-600 hover:text-blue-800">View Product</a>';
 
@@ -176,6 +193,45 @@ $existingCategories = $stmt->fetchAll(PDO::FETCH_COLUMN);
                         </div>
                     </div>
                     
+                    <!-- Unit of Measure -->
+                    <div>
+                        <label for="unit_of_measure" class="block text-sm font-medium text-gray-700 mb-2">
+                            Unit of Measure *
+                        </label>
+                        <select name="unit_of_measure" id="unit_of_measure"
+                                class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            <?php
+                            $units = ['pieza','bolsa 25kg','metro lineal','m²','m³','rollo','kg','tonelada','galón','litro','pallet'];
+                            $selectedUnit = $_POST['unit_of_measure'] ?? 'pieza';
+                            foreach ($units as $u):
+                            ?>
+                            <option value="<?= htmlspecialchars($u) ?>" <?= $u === $selectedUnit ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($u) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">How this product is sold (e.g. per bag, per meter)</p>
+                    </div>
+
+                    <!-- Bulk Pricing Tiers -->
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Bulk Pricing Tiers <span class="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <div id="pricing-tiers" class="space-y-2 mb-3">
+                            <div class="grid grid-cols-5 gap-2 text-xs text-gray-500 font-medium px-1">
+                                <span class="col-span-2">Min. Quantity</span>
+                                <span class="col-span-2">Price per Unit ($)</span>
+                                <span></span>
+                            </div>
+                        </div>
+                        <button type="button" id="add-tier-btn"
+                                class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                            <i class="fas fa-plus-circle"></i> Add tier
+                        </button>
+                        <p class="text-xs text-gray-500 mt-1">E.g. 1–9 pcs at base price, 10–49 at $X, 50+ at $Y</p>
+                    </div>
+
                     <div>
                         <label for="stock" class="block text-sm font-medium text-gray-700 mb-2">
                             Stock Quantity *
@@ -506,6 +562,23 @@ $existingCategories = $stmt->fetchAll(PDO::FETCH_COLUMN);
             const name = this.value;
             const sku = name.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
             document.getElementById('sku').value = sku;
+        });
+
+        // Bulk pricing tiers
+        document.getElementById('add-tier-btn').addEventListener('click', function() {
+            const container = document.getElementById('pricing-tiers');
+            const row = document.createElement('div');
+            row.className = 'grid grid-cols-5 gap-2 items-center';
+            row.innerHTML = `
+                <input type="number" name="tier_qty[]" min="1" placeholder="Min qty"
+                       class="col-span-2 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
+                <input type="number" name="tier_price[]" min="0" step="0.01" placeholder="Price"
+                       class="col-span-2 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
+                <button type="button" class="text-red-400 hover:text-red-600 text-center"
+                        onclick="this.closest('.grid').remove()">
+                    <i class="fas fa-times"></i>
+                </button>`;
+            container.appendChild(row);
         });
     </script>
 </body>

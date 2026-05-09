@@ -1,11 +1,8 @@
 <?php
-session_start();
 require_once 'config/database.php';
-require_once 'includes/security.php';
 require_once 'includes/PaymentGateway.php';
 require_once 'includes/CreditCheck.php';
-require_once 'includes/OrderProcessor.php';
-// require_once 'includes/dummy_data.php'; // Removed dummy data
+require_once 'includes/shipping/ShippingService.php';
 
 // Check if user is logged in
 if (!isLoggedIn()) {
@@ -69,15 +66,10 @@ if ($orderId > 0) {
         }
     }
     
-    // Simple Shipping Calculation (Database doesn't have weights/dims yet)
-    // Flat rate $10 + $5 per item for now as per project requirements
-    $shippingBaseRate = 10.00;
-    $shippingPerItem = 5.00;
-    
-    $shippingCost = $shippingBaseRate + (count($cartItems) * $shippingPerItem);
-    
-    // Tax Calculation
-    $taxAmount = $orderTotal * 0.08; // 8% tax
+    // Shipping cost comes from the carrier quote selected by the buyer.
+    // Populated via AJAX call to shipping-quotes.php; default 0 until a quote is chosen.
+    $shippingCost = (float) ($_POST['selected_shipping_cost'] ?? 0);
+    $taxAmount = $orderTotal * TAX_RATE;
     $orderTotal += $shippingCost + $taxAmount;
 }
 
@@ -96,25 +88,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
     
     if ($action === 'create_order' && $orderId === 0) {
-        // Collect shipping info
-        $shippingInfo = [
-           'address' => $_POST['address'] ?? '',
-           'city' => $_POST['city'] ?? '',
-           'zip' => $_POST['zip'] ?? ''
-        ];
+        // Validate shipping address postal code
+        $destinationPostal  = trim($_POST['destination_postal'] ?? '');
+        $selectedCarrier    = trim($_POST['selected_carrier']    ?? 'standard');
+        $selectedService    = trim($_POST['selected_service']    ?? 'standard');
 
-        // Check credit limit before creating order
-        $creditResult = $creditCheck->checkCreditForOrder($_SESSION['user_id'], $orderTotal);
-        
-        if (!$creditResult['approved']) {
-            $error = "Credit Check Failed: " . $creditResult['message'];
-        } else {
+        if (!ShippingService::isValidMexicoPostal($destinationPostal)) {
+            $error = "Por favor ingresa un código postal válido de 5 dígitos.";
+        }
+
+        if (!isset($error)) {
+            // Check credit limit before creating order
+            $creditResult = $creditCheck->checkCreditForOrder($_SESSION['user_id'], $orderTotal);
+
+            if (!$creditResult['approved']) {
+                $error = "Credit Check Failed: " . $creditResult['message'];
+            } else {
             // Create new order
-            // Note: We pass $cartItems (structure with product_id, quantity) to OrderProcessor
-            $result = $orderProcessor->createOrder($_SESSION['user_id'], $cartItems, $shippingInfo);
+            try {
+                $pdo->beginTransaction();
 
-            if ($result['success']) {
-                $orderId = $result['order_id'];
+                // Validate and lock stock before creating order
+                foreach ($cartItems as $item) {
+                    $stockStmt = $pdo->prepare("SELECT id, stock FROM products WHERE id = ? AND status = 'active' FOR UPDATE");
+                    $stockStmt->execute([$item['product_id']]);
+                    $p = $stockStmt->fetch();
+                    if (!$p || $p['stock'] < $item['quantity']) {
+                        throw new Exception("Insufficient stock for product {$item['product_id']}");
+                    }
+                }
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO orders (customer_id, total_amount, shipping_cost, tax_amount,
+                                       shipping_carrier, shipping_service, destination_postal,
+                                       status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_payment', NOW())
+                ");
+                $stmt->execute([
+                    $_SESSION['user_id'], $orderTotal, $shippingCost, $taxAmount,
+                    $selectedCarrier, $selectedService, $destinationPostal,
+                ]);
+                $orderId = $pdo->lastInsertId();
+
+                // Add order items
+                foreach ($cartItems as $item) {
+                    $stmt = $pdo->prepare("
+                        INSERT INTO order_items (order_id, product_id, quantity, price)
+                        VALUES (?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$orderId, $item['product_id'], $item['quantity'], $item['price']]);
+                }
+
+                // Decrement stock atomically
+                foreach ($cartItems as $item) {
+                    $pdo->prepare("UPDATE products SET stock = stock - ? WHERE id = ?")->execute([$item['quantity'], $item['product_id']]);
+                }
                 
                 // If credit was applied, reserve it
                 if ($creditResult['credit_applied']) {
@@ -135,9 +163,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } else {
                 $error = "Failed to create order: " . $result['error'];
             }
-        }
+            } // end else (credit approved)
+        } // end if (!isset($error))
     }
-    
+
     if ($action === 'process_payment' && $orderId > 0) {
         $paymentMethod = $_POST['payment_method'] ?? '';
         $paymentData = [];
@@ -180,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     <!-- PayPal SDK -->
     <?php if ($paymentConfig['paypal']['enabled']): ?>
-    <script src="https://www.paypal.com/sdk/js?client-id=<?= $paymentConfig['paypal']['client_id'] ?>&currency=USD"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=<?= htmlspecialchars($paymentConfig['paypal']['client_id'], ENT_QUOTES, 'UTF-8') ?>&currency=USD"></script>
     <?php endif; ?>
 </head>
 <body class="bg-gray-50">
@@ -219,7 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <span>$<?= number_format($shippingCost, 2) ?></span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-gray-600">Tax</span>
+                        <span class="text-gray-600"><?= TAX_LABEL ?></span>
                         <span>$<?= number_format($taxAmount, 2) ?></span>
                     </div>
                     <div class="flex justify-between font-semibold text-lg border-t pt-2">
@@ -240,32 +269,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <?php endif; ?>
                 
                 <?php if ($orderId === 0): ?>
-                    <!-- Create Order Form -->
-                    <form method="POST" id="create-order-form" class="space-y-4">
-                        <?= Security::getCSRFInput() ?>
+                    <!-- Shipping Address + Carrier Selection -->
+                    <form method="POST" id="create-order-form">
+                        <?= generateCSRFInput() ?>
                         <input type="hidden" name="action" value="create_order">
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Shipping Address</label>
-                            <input type="text" name="address" required placeholder="123 Main St"
-                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">City</label>
-                                <input type="text" name="city" required placeholder="New York"
-                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">ZIP</label>
-                                <input type="text" name="zip" required placeholder="10001"
-                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                        <input type="hidden" name="selected_shipping_cost" id="selected_shipping_cost" value="0">
+                        <input type="hidden" name="selected_carrier"       id="selected_carrier"       value="standard">
+                        <input type="hidden" name="selected_service"       id="selected_service"       value="standard">
+
+                        <div class="mb-6">
+                            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Shipping Address</h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Postal Code (CP)</label>
+                                    <input type="text"
+                                           name="destination_postal"
+                                           id="destination_postal"
+                                           maxlength="5"
+                                           pattern="\d{5}"
+                                           placeholder="e.g. 64000"
+                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           required>
+                                    <p class="text-xs text-gray-500 mt-1">5-digit Mexico postal code</p>
+                                </div>
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        <!-- Shipping Quotes (populated via JS) -->
+                        <div id="shipping-quotes-section" class="mb-6 hidden">
+                            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Choose Shipping</h3>
+                            <div id="shipping-quotes-list" class="space-y-2"></div>
+                        </div>
+
+                        <div id="shipping-loading" class="hidden text-sm text-gray-500 mb-4">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Getting shipping rates...
+                        </div>
+
+                        <div id="shipping-error" class="hidden bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded mb-4"></div>
+
+                        <button type="submit" id="continue-btn"
+                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled>
                             Continue to Payment
                         </button>
+                        <p id="select-shipping-hint" class="text-xs text-gray-500 text-center mt-2">Enter your postal code to see shipping options</p>
                     </form>
                 <?php else: ?>
                     <!-- Payment Methods -->
@@ -426,7 +473,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         <?php if ($paymentConfig['stripe']['enabled'] && $orderId > 0): ?>
         // Initialize Stripe
-        const stripe = Stripe('<?= $paymentConfig['stripe']['publishable_key'] ?>');
+        const stripe = Stripe(<?= json_encode($paymentConfig['stripe']['publishable_key']) ?>);
         const elements = stripe.elements();
         
         const cardElement = elements.create('card', {
@@ -504,6 +551,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 alert('An error occurred with PayPal. Please try again.');
             }
         }).render('#paypal-button-container');
+        <?php endif; ?>
+
+        <?php if ($orderId === 0): ?>
+        // Shipping quote lookup
+        (function () {
+            const postalInput   = document.getElementById('destination_postal');
+            const quotesSection = document.getElementById('shipping-quotes-section');
+            const quotesList    = document.getElementById('shipping-quotes-list');
+            const loadingEl     = document.getElementById('shipping-loading');
+            const errorEl       = document.getElementById('shipping-error');
+            const continueBtn   = document.getElementById('continue-btn');
+            const hint          = document.getElementById('select-shipping-hint');
+            const csrfToken     = document.querySelector('input[name="csrf_token"]').value;
+
+            let debounceTimer;
+
+            postalInput.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                const val = this.value.replace(/\D/g, '').slice(0, 5);
+                this.value = val;
+
+                if (val.length === 5) {
+                    debounceTimer = setTimeout(() => fetchQuotes(val), 600);
+                } else {
+                    quotesSection.classList.add('hidden');
+                    continueBtn.disabled = true;
+                    hint.textContent = 'Enter your postal code to see shipping options';
+                }
+            });
+
+            async function fetchQuotes(postal) {
+                loadingEl.classList.remove('hidden');
+                errorEl.classList.add('hidden');
+                quotesSection.classList.add('hidden');
+                continueBtn.disabled = true;
+
+                try {
+                    const fd = new FormData();
+                    fd.append('csrf_token', csrfToken);
+                    fd.append('destination_postal', postal);
+
+                    const res = await fetch('shipping-quotes.php', { method: 'POST', body: fd });
+                    const data = await res.json();
+
+                    if (!res.ok || data.error) {
+                        showError(data.error || 'Could not get shipping rates. Please try again.');
+                        return;
+                    }
+
+                    renderQuotes(data.quotes || []);
+                } catch (e) {
+                    showError('Network error. Please check your connection.');
+                } finally {
+                    loadingEl.classList.add('hidden');
+                }
+            }
+
+            function renderQuotes(quotes) {
+                quotesList.innerHTML = '';
+
+                if (!quotes.length) {
+                    showError('No shipping options available for this postal code.');
+                    return;
+                }
+
+                quotes.forEach((q, i) => {
+                    const days = q.transit_days > 0 ? ` · ${q.transit_days} día${q.transit_days > 1 ? 's' : ''}` : '';
+                    const div = document.createElement('label');
+                    div.className = 'flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50';
+                    div.innerHTML = `
+                        <div class="flex items-center">
+                            <input type="radio" name="shipping_quote" value="${i}" class="mr-3" ${i === 0 ? 'checked' : ''}>
+                            <span class="font-medium text-sm">${escHtml(q.carrier_label)}${days}</span>
+                        </div>
+                        <span class="font-semibold text-sm">$${q.price.toFixed(2)} MXN</span>
+                    `;
+                    div.querySelector('input').addEventListener('change', () => selectQuote(q));
+                    quotesList.appendChild(div);
+                });
+
+                quotesSection.classList.remove('hidden');
+                selectQuote(quotes[0]);
+            }
+
+            function selectQuote(q) {
+                document.getElementById('selected_shipping_cost').value = q.price.toFixed(2);
+                document.getElementById('selected_carrier').value       = q.carrier;
+                document.getElementById('selected_service').value       = q.service_code;
+                continueBtn.disabled = false;
+                hint.textContent = '';
+            }
+
+            function showError(msg) {
+                errorEl.textContent = msg;
+                errorEl.classList.remove('hidden');
+            }
+
+            function escHtml(str) {
+                return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            }
+        })();
         <?php endif; ?>
     </script>
 </body>

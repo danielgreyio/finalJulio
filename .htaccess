@@ -1,0 +1,25 @@
+Options -Indexes
+ServerSignature Off
+
+# Block sensitive files
+<FilesMatch "(\.env|composer\.(json|lock)|\.git|\.gitignore)$">
+    Require all denied
+</FilesMatch>
+
+# Block sensitive directories
+<DirectoryMatch "/(vendor|config|includes|logs|migrations|cron|automation)/">
+    Require all denied
+</DirectoryMatch>
+
+# Security headers
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://js.stripe.com https://www.paypal.com https://sdk.mercadopago.com https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com https://api.mercadopago.com"
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+
+# PHP front controller
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d

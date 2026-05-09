@@ -1,6 +1,5 @@
 <?php
 require_once 'config/database.php';
-require_once 'includes/security.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -12,11 +11,11 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF Protection temporarily disabled
-    // if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
-    //     Security::logSecurityEvent('csrf_token_mismatch', ['page' => 'register']);
-    //     die('CSRF token mismatch');
-    // }
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        Security::logSecurityEvent('csrf_token_mismatch', ['page' => 'register']);
+        http_response_code(403);
+        die('Invalid request. Please go back and try again.');
+    }
     
     // Rate limiting
     if (!Security::checkRateLimit('register', 5, 3600)) { // 5 attempts per hour
@@ -53,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$sanitizedData['email']]);
             
             if ($stmt->fetch()) {
-                $error = 'An account with this email already exists.';
+                $error = 'Registration could not be completed. Please check your details or try a different email.';
             } else {
                 // Create new user
                 $hashedPassword = Security::hashPassword($sanitizedData['password']);

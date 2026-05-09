@@ -112,19 +112,44 @@ if command -v scp >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
         
         # Deploy on remote server
         echo "Deploying on remote server..."
-        ssh $DEPLOY_USER@$LINODE_IP << EOF
+        ssh $DEPLOY_USER@$LINODE_IP << 'ENDSSH'
+set -e
+REMOTE_PATH="/var/www/html"
+ENV_FILE="$REMOTE_PATH/.env"
+
 cd /tmp
-if [ "$ARCHIVE_TYPE" = "tar.gz" ]; then
-    tar -xzf $ARCHIVE_FILE
+if ls ventdepot-deploy.tar.gz >/dev/null 2>&1; then
+    tar -xzf ventdepot-deploy.tar.gz
 else
-    unzip -o $ARCHIVE_FILE
+    unzip -o ventdepot-deploy.zip
 fi
 cp -r deploy_temp/* $REMOTE_PATH
+
+# Run database migrations
+echo "=== Running migrations ==="
+if [ -f "$ENV_FILE" ]; then
+    DB_HOST=$(grep '^DB_HOST=' "$ENV_FILE" | cut -d= -f2 | tr -d '"'"'" )
+    DB_NAME=$(grep '^DB_NAME=' "$ENV_FILE" | cut -d= -f2 | tr -d '"'"'" )
+    DB_USER=$(grep '^DB_USER=' "$ENV_FILE" | cut -d= -f2 | tr -d '"'"'" )
+    DB_PASS=$(grep '^DB_PASS=' "$ENV_FILE" | cut -d= -f2 | tr -d '"'"'" )
+
+    for MIGRATION in $(ls -v "$REMOTE_PATH/migrations/"*.sql 2>/dev/null); do
+        echo "  Applying $(basename $MIGRATION)..."
+        mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$MIGRATION" && \
+            echo "  OK" || echo "  WARNING: $MIGRATION returned errors (may be safe to ignore if idempotent)"
+    done
+else
+    echo "  WARNING: .env not found at $ENV_FILE — skipping migrations. Run them manually."
+fi
+
 chown -R www-data:www-data $REMOTE_PATH
 chmod -R 755 $REMOTE_PATH
+# Protect .env from web access
+chmod 640 $REMOTE_PATH/.env 2>/dev/null || true
+
 systemctl reload apache2
-echo "Deployment completed at \$(date)"
-EOF
+echo "Deployment completed at $(date)"
+ENDSSH
         
         if [ $? -eq 0 ]; then
             echo "Deployment completed successfully!"

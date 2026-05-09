@@ -103,12 +103,23 @@ $_SESSION['cart_count'] = array_sum($cart);
                                              alt="<?= htmlspecialchars($item['name']) ?>" 
                                              class="w-full h-full object-cover rounded-md border border-gray-200">
                                     </div>
-                                    <div class="flex-grow text-center sm:text-left">
-                                        <a href="product.php?id=<?= $item['product_id'] ?>" class="text-lg font-semibold text-gray-800 hover:text-primary transition duration-300">
-                                            <?= htmlspecialchars($item['name']) ?>
-                                        </a>
-                                        <div class="text-gray-500 text-sm mt-1">ID: <?= $item['product_id'] ?></div>
-                                        <div class="text-primary font-bold mt-2">$<?= number_format($item['price'], 2) ?></div>
+                                    
+                                    <!-- Product Details -->
+                                    <div class="flex-1 min-w-0">
+                                        <h3 class="text-lg font-semibold text-gray-900">
+                                            <a href="product.php?id=<?= $item['product']['id'] ?>" class="hover:text-blue-600">
+                                                <?= htmlspecialchars($item['product']['name']) ?>
+                                            </a>
+                                        </h3>
+                                        <p class="text-gray-600 text-sm mt-1">
+                                            <?= htmlspecialchars(substr($item['product']['description'], 0, 100)) ?>...
+                                        </p>
+                                        <p class="text-blue-600 font-semibold mt-2">
+                                            $<?= number_format($item['product']['price'], 2) ?>
+                                            <?php if (!empty($item['product']['unit_of_measure'])): ?>
+                                                <span class="text-gray-400 font-normal text-sm">/ <?= htmlspecialchars($item['product']['unit_of_measure']) ?></span>
+                                            <?php endif; ?>
+                                        </p>
                                     </div>
                                     <div class="flex flex-col items-center gap-2">
                                         <div class="flex items-center border border-gray-300 rounded-md">

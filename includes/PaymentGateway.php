@@ -1,78 +1,50 @@
 <?php
 /**
- * Payment Gateway Integration System
- * Handles Stripe and PayPal payment processing for marketplace transactions
+ * Payment Gateway — orchestration layer.
+ *
+ * Handles DB transaction, order verification, commission splits, and credit release.
+ * Delegates actual API calls to the active PaymentProvider (Stripe / PayPal / MercadoPago),
+ * selected via .env PAYMENT_PROVIDER. To swap processors, change one line in .env.
  */
 
 require_once 'security.php';
 require_once __DIR__ . '/CreditCheck.php';
+require_once __DIR__ . '/payments/PaymentService.php';
 
 class PaymentGateway {
     private $pdo;
-    private $stripeSecretKey;
-    private $stripePublishableKey;
-    private $paypalClientId;
-    private $paypalClientSecret;
-    private $paypalMode; // 'sandbox' or 'live'
-    
+    private $creditCheck;
+
     public function __construct($pdo) {
-        $this->pdo = $pdo;
+        $this->pdo         = $pdo;
         $this->creditCheck = new CreditCheck($pdo);
-        $this->loadConfiguration();
     }
-    
+
     /**
-     * Load payment gateway configuration
-     */
-    private function loadConfiguration() {
-        // These should be loaded from environment variables or secure config
-        $this->stripeSecretKey = $_ENV['STRIPE_SECRET_KEY'] ?? 'sk_test_dummy';
-        $this->stripePublishableKey = $_ENV['STRIPE_PUBLISHABLE_KEY'] ?? 'pk_test_dummy';
-        // Default to 'sb' (PayPal Sandbox) if not set, to enable the feature for demo
-        $this->paypalClientId = $_ENV['PAYPAL_CLIENT_ID'] ?? 'sb'; 
-        $this->paypalClientSecret = $_ENV['PAYPAL_CLIENT_SECRET'] ?? 'secret';
-        $this->paypalMode = $_ENV['PAYPAL_MODE'] ?? 'sandbox';
-    }
-    
-    /**
-     * Process payment through selected gateway
+     * Process payment through the active provider.
      */
     public function processPayment($orderId, $paymentMethod, $paymentData) {
         try {
             $this->pdo->beginTransaction();
-            
-            // Get order details
+
             $order = $this->getOrderDetails($orderId);
             if (!$order) {
                 throw new Exception("Order not found");
             }
-            
-            // Validate order status
-            if ($order['status'] !== 'pending_payment' && $order['status'] !== 'pending') {
-                throw new Exception("Order is not in a payable state (Status: " . $order['status'] . ")");
+
+            if ($order['status'] !== 'pending_payment') {
+                throw new Exception("Order is not in a payable state");
             }
-            
-            $result = null;
-            
-            switch ($paymentMethod) {
-                case 'stripe':
-                    $result = $this->processStripePayment($order, $paymentData);
-                    break;
-                    
-                case 'paypal':
-                    $result = $this->processPayPalPayment($order, $paymentData);
-                    break;
-                    
-                case 'mock':
-                    $result = $this->processMockPayment($order, $paymentData);
-                    break;
-                    
-                default:
-                    throw new Exception("Unsupported payment method");
-            }
-            
+
+            $provider = PaymentService::getProvider();
+            $result   = $provider->charge($order, $paymentData);
+
+            // Use the configured provider name for the transaction record (authoritative)
+            $activeMethod = strtolower(env('PAYMENT_PROVIDER', $paymentMethod));
+
             if ($result['success']) {
-                $transactionId = 0;
+                // Record payment transaction
+                $transactionId = $this->recordTransaction($orderId, $activeMethod, $result);
                 
                 // Check if this is a mock payment
                 $isMock = false;
@@ -135,162 +107,25 @@ class PaymentGateway {
                 'error' => $e->getMessage()
             ], 'error');
             
+            error_log('Payment exception: ' . $e->getMessage() . ' (order ' . $orderId . ')');
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => 'Payment processing failed. Your card has not been charged.',
             ];
         }
     }
-    
-    /**
-     * Process Stripe payment
-     */
-    private function processStripePayment($order, $paymentData) {
-        try {
-            // Initialize Stripe (this is a simplified version - you'd need the actual Stripe PHP SDK)
-            $stripe = [
-                'secret_key' => $this->stripeSecretKey,
-                'publishable_key' => $this->stripePublishableKey
-            ];
-            
-            // Calculate amounts (in cents for Stripe)
-            $totalAmount = round($order['total'] * 100);
-            $platformFee = round($order['total'] * 0.029 * 100); // 2.9% platform fee
-            
-            // Create payment intent or charge
-            $paymentIntent = $this->createStripePaymentIntent([
-                'amount' => $totalAmount,
-                'currency' => 'usd',
-                'payment_method' => $paymentData['payment_method_id'],
-                'confirm' => true,
-                'metadata' => [
-                    'order_id' => $order['id'],
-                    'customer_id' => $order['user_id'],
-                    'merchant_id' => $order['merchant_id']
-                ],
-                'application_fee_amount' => $platformFee
-            ]);
-            
-            if ($paymentIntent['status'] === 'succeeded') {
-                return [
-                    'success' => true,
-                    'gateway_reference' => $paymentIntent['id'],
-                    'net_amount' => ($totalAmount - $platformFee) / 100,
-                    'platform_fee' => $platformFee / 100,
-                    'gateway_fee' => 0, // Included in platform fee
-                    'raw_response' => json_encode($paymentIntent)
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'error_message' => 'Payment requires additional authentication or failed'
-                ];
-            }
-            
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error_message' => $e->getMessage()
-            ];
-        }
-    }
-    
-    /**
-     * Process PayPal payment
-     */
-    private function processPayPalPayment($order, $paymentData) {
-        try {
-            // MOCK: If using the 'sb' dummy ID, return success immediately
-            if ($this->paypalClientId === 'sb') {
-                $totalAmount = number_format($order['total'], 2, '.', '');
-                $platformFee = number_format($order['total'] * 0.029, 2, '.', '');
-                $merchantAmount = number_format($order['total'] - $platformFee, 2, '.', '');
-                
-                return [
-                    'success' => true,
-                    'gateway_reference' => 'mock_pp_' . uniqid(),
-                    'net_amount' => floatval($merchantAmount),
-                    'platform_fee' => floatval($platformFee),
-                    'gateway_fee' => 0,
-                    'raw_response' => json_encode(['status' => 'COMPLETED', 'mock' => true])
-                ];
-            }
 
-            // Get PayPal access token
-            $accessToken = $this->getPayPalAccessToken();
-            
-            if (!$accessToken) {
-                throw new Exception("Failed to get PayPal access token");
-            }
-            
-            // Calculate amounts
-            $totalAmount = number_format($order['total'], 2, '.', '');
-            $platformFee = number_format($order['total'] * 0.029, 2, '.', '');
-            $merchantAmount = number_format($order['total'] - $platformFee, 2, '.', '');
-            
-            // Create PayPal order
-            $paypalOrder = $this->createPayPalOrder([
-                'intent' => 'CAPTURE',
-                'purchase_units' => [
-                    [
-                        'reference_id' => 'order_' . $order['id'],
-                        'amount' => [
-                            'currency_code' => 'USD',
-                            'value' => $totalAmount
-                        ],
-                        'payee' => [
-                            'merchant_id' => $order['merchant_paypal_id'] ?? null
-                        ],
-                        'payment_instruction' => [
-                            'platform_fees' => [
-                                [
-                                    'amount' => [
-                                        'currency_code' => 'USD',
-                                        'value' => $platformFee
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ]
-                ]
-            ], $accessToken);
-            
-            if ($paypalOrder && $paypalOrder['status'] === 'COMPLETED') {
-                return [
-                    'success' => true,
-                    'gateway_reference' => $paypalOrder['id'],
-                    'net_amount' => floatval($merchantAmount),
-                    'platform_fee' => floatval($platformFee),
-                    'gateway_fee' => 0,
-                    'raw_response' => json_encode($paypalOrder)
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'error_message' => 'PayPal payment failed or requires approval'
-                ];
-            }
-            
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error_message' => $e->getMessage()
-            ];
-        }
-    }
-    
     /**
      * Record payment transaction
      */
     private function recordTransaction($orderId, $paymentMethod, $result) {
         $stmt = $this->pdo->prepare("
             INSERT INTO payment_transactions (
-                order_id, payment_method, gateway_reference, amount, 
-                platform_fee, gateway_fee, net_amount, status, 
-                raw_response, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, NOW())
+                order_id, payment_method, gateway_reference, amount,
+                platform_fee, gateway_fee, net_amount, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', NOW())
         ");
-        
+
         $stmt->execute([
             $orderId,
             $paymentMethod,
@@ -299,7 +134,6 @@ class PaymentGateway {
             $result['platform_fee'],
             $result['gateway_fee'],
             $result['net_amount'],
-            $result['raw_response']
         ]);
         
         return $this->pdo->lastInsertId();
@@ -362,129 +196,38 @@ class PaymentGateway {
     }
     
     /**
-     * Create Stripe Payment Intent (simplified version)
-     */
-    private function createStripePaymentIntent($data) {
-        // This is a simplified simulation - you'd use the actual Stripe PHP SDK
-        $curl = curl_init();
-        
-        curl_setopt_array($curl, [
-            CURLOPT_URL => "https://api.stripe.com/v1/payment_intents",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer " . $this->stripeSecretKey,
-                "Content-Type: application/x-www-form-urlencoded"
-            ],
-            CURLOPT_POSTFIELDS => http_build_query($data)
-        ]);
-        
-        $response = curl_exec($curl);
-        curl_close($curl);
-        
-        return json_decode($response, true);
-    }
-    
-    /**
-     * Get PayPal access token
-     */
-    private function getPayPalAccessToken() {
-        $baseUrl = $this->paypalMode === 'live' 
-            ? 'https://api.paypal.com' 
-            : 'https://api.sandbox.paypal.com';
-        
-        $curl = curl_init();
-        
-        curl_setopt_array($curl, [
-            CURLOPT_URL => $baseUrl . "/v1/oauth2/token",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => [
-                "Accept: application/json",
-                "Accept-Language: en_US"
-            ],
-            CURLOPT_USERPWD => $this->paypalClientId . ":" . $this->paypalClientSecret,
-            CURLOPT_POSTFIELDS => "grant_type=client_credentials"
-        ]);
-        
-        $response = curl_exec($curl);
-        curl_close($curl);
-        
-        $data = json_decode($response, true);
-        return $data['access_token'] ?? null;
-    }
-    
-    /**
-     * Create PayPal order
-     */
-    private function createPayPalOrder($orderData, $accessToken) {
-        $baseUrl = $this->paypalMode === 'live' 
-            ? 'https://api.paypal.com' 
-            : 'https://api.sandbox.paypal.com';
-        
-        $curl = curl_init();
-        
-        curl_setopt_array($curl, [
-            CURLOPT_URL => $baseUrl . "/v2/checkout/orders",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => [
-                "Content-Type: application/json",
-                "Authorization: Bearer " . $accessToken
-            ],
-            CURLOPT_POSTFIELDS => json_encode($orderData)
-        ]);
-        
-        $response = curl_exec($curl);
-        curl_close($curl);
-        
-        return json_decode($response, true);
-    }
-    
-    /**
-     * Process refund
+     * Process refund via the provider that originally processed the transaction.
      */
     public function processRefund($transactionId, $amount = null, $reason = '') {
         try {
             $transaction = $this->getTransaction($transactionId);
-            
             if (!$transaction) {
                 throw new Exception("Transaction not found");
             }
-            
+
             $refundAmount = $amount ?? $transaction['amount'];
-            
-            switch ($transaction['payment_method']) {
-                case 'stripe':
-                    $result = $this->processStripeRefund($transaction, $refundAmount, $reason);
-                    break;
-                    
-                case 'paypal':
-                    $result = $this->processPayPalRefund($transaction, $refundAmount, $reason);
-                    break;
-                    
-                default:
-                    throw new Exception("Unsupported payment method for refund");
-            }
-            
+            $gatewayRef   = $transaction['gateway_reference'];
+            $method       = $transaction['payment_method'];
+
+            // Route to the correct provider regardless of current PAYMENT_PROVIDER setting
+            $provider = match ($method) {
+                'stripe'      => new StripeProvider(),
+                'paypal'      => new PayPalProvider(),
+                'mercadopago' => new MercadoPagoProvider(),
+                default       => throw new Exception("Unknown payment method: $method"),
+            };
+
+            $result = $provider->refund($gatewayRef, $refundAmount, $reason);
+
             if ($result['success']) {
-                // Record refund transaction
                 $this->recordRefund($transactionId, $refundAmount, $result['refund_id'], $reason);
-                
-                return [
-                    'success' => true,
-                    'refund_id' => $result['refund_id'],
-                    'amount' => $refundAmount
-                ];
-            } else {
-                throw new Exception($result['error_message']);
+                return ['success' => true, 'refund_id' => $result['refund_id'], 'amount' => $refundAmount];
             }
-            
+
+            throw new Exception($result['error'] ?? 'Refund failed');
+
         } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
     
@@ -511,37 +254,6 @@ class PaymentGateway {
         ");
         
         return $stmt->execute([$transactionId, $amount, $refundId, $reason]);
-    }
-    
-    /**
-     * Process Stripe refund
-     */
-    private function processStripeRefund($transaction, $amount, $reason) {
-        // Simplified Stripe refund process
-        $refundData = [
-            'charge' => $transaction['gateway_reference'],
-            'amount' => round($amount * 100), // Convert to cents
-            'reason' => 'requested_by_customer'
-        ];
-        
-        // This would use the actual Stripe API
-        return [
-            'success' => true,
-            'refund_id' => 're_' . uniqid(),
-            'amount' => $amount
-        ];
-    }
-    
-    /**
-     * Process PayPal refund
-     */
-    private function processPayPalRefund($transaction, $amount, $reason) {
-        // Simplified PayPal refund process
-        return [
-            'success' => true,
-            'refund_id' => 'paypal_refund_' . uniqid(),
-            'amount' => $amount
-        ];
     }
     
     /**
@@ -592,23 +304,11 @@ class PaymentGateway {
     }
     
     /**
-     * Get payment methods configuration for frontend
+     * Get payment methods configuration for frontend.
+     * Delegates to PaymentService so checkout.php doesn't need to change.
      */
-    public function getPaymentMethodsConfig() {
-        return [
-            'stripe' => [
-                'enabled' => !empty($this->stripePublishableKey),
-                'publishable_key' => $this->stripePublishableKey
-            ],
-            'paypal' => [
-                'enabled' => !empty($this->paypalClientId),
-                'client_id' => $this->paypalClientId,
-                'mode' => $this->paypalMode
-            ],
-            'mock' => [
-                'enabled' => true // Always enabled for testing
-            ]
-        ];
+    public function getPaymentMethodsConfig(): array {
+        return PaymentService::getAllFrontendConfigs();
     }
     
     /**

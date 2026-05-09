@@ -79,3 +79,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script>
+(function() {
+    var t = '<?= htmlspecialchars($_SESSION['csrf_token'] ?? \Security::generateCSRFToken(), ENT_QUOTES, 'UTF-8') ?>';
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('form[method="post"],form[method="POST"]').forEach(function(f) {
+            if (!f.querySelector('[name="csrf_token"]')) {
+                var i = document.createElement('input');
+                i.type = 'hidden'; i.name = 'csrf_token'; i.value = t;
+                f.prepend(i);
+            }
+        });
+    });
+})();
+</script>

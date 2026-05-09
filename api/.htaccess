@@ -1,9 +1,8 @@
 RewriteEngine On
 
-# Enable CORS for API requests
-Header always set Access-Control-Allow-Origin "*"
+# CORS is set dynamically in PHP (api/index.php) based on APP_URL — no wildcard here
 Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-API-Key"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-API-Key, X-CSRF-Token"
 
 # Handle preflight OPTIONS requests
 RewriteCond %{REQUEST_METHOD} OPTIONS

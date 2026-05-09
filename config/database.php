@@ -1,47 +1,30 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-// Database Configuration
-$host = 'localhost';
-$dbname = 'ventdepot';
-$username = 'root';
-$password = '';
+require_once __DIR__ . '/bootstrap.php';
+
+// Database connection — credentials from .env
+$host     = env('DB_HOST',     'localhost');
+$dbname   = env('DB_DATABASE', 'ventdepot');
+$username = env('DB_USERNAME', 'root');
+$password = env('DB_PASSWORD', '');
+$port     = env('DB_PORT',     '3306');
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo = new PDO(
+        "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4",
+        $username,
+        $password
+    );
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch(PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+} catch (PDOException $e) {
+    error_log('DB connection failed: ' . $e->getMessage());
+    die('Database connection error. Please try again later.');
 }
 
-// Include engineering helpers
-require_once __DIR__ . '/../includes/engineering_helpers.php';
-
-// Include other helper functions
-function isLoggedIn() {
-    return isset($_SESSION['user_id']);
-}
-
-function getUserRole() {
-    return $_SESSION['user_role'] ?? '';
-}
-
-function requireRole($role) {
-    if (!isLoggedIn() || getUserRole() !== $role) {
-        header('Location: ../login.php');
-        exit;
-    }
-}
-
-function requireLogin() {
-    if (!isLoggedIn()) {
-        header('Location: login.php');
-        exit;
-    }
-}
-
-function getCartCount() {
-    return array_sum($_SESSION['cart'] ?? []);
+// Engineering helpers (optional — only if file exists)
+$engHelpers = __DIR__ . '/../includes/engineering_helpers.php';
+if (file_exists($engHelpers)) {
+    require_once $engHelpers;
 }
 ?>
