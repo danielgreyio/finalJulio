@@ -114,24 +114,22 @@ class WebhookHandler {
     }
     
     /**
-     * Process PayPal webhook
+     * Process PayPal webhook — verifies signature before acting.
      */
     private function processPayPalWebhook() {
-        $payload = @file_get_contents('php://input');
-        $headers = getallheaders();
+        $payload   = @file_get_contents('php://input');
+        $headers   = getallheaders();
+        $webhookId = env('PAYPAL_WEBHOOK_ID', '');
 
-        // TODO: Implement full PayPal webhook signature verification.
-        // PayPal sends PAYPAL-CERT-URL, PAYPAL-TRANSMISSION-ID, PAYPAL-TRANSMISSION-TIME,
-        // PAYPAL-TRANSMISSION-SIG, and PAYPAL-AUTH-ALGO headers. Use these to call
-        // POST /v1/notifications/verify-webhook-signature via the PayPal SDK or REST API.
-        // See: https://developer.paypal.com/docs/api/webhooks/v1/#verify-webhook-signature
-        //
-        // Until verification is wired in, we log and acknowledge but take no further action.
-        $webhookId = $_ENV['PAYPAL_WEBHOOK_ID'] ?? '';
         if (empty($webhookId)) {
-            error_log('PayPal webhook received but PAYPAL_WEBHOOK_ID not configured — skipping processing');
-            http_response_code(200);
+            error_log('PayPal webhook received but PAYPAL_WEBHOOK_ID not configured');
             return ['success' => true, 'message' => 'acknowledged'];
+        }
+
+        if (!$this->verifyPayPalSignature($payload, $headers, $webhookId)) {
+            Security::logSecurityEvent('webhook_signature_invalid', ['gateway' => 'paypal'], 'warning');
+            http_response_code(401);
+            return ['success' => false, 'error' => 'Signature verification failed'];
         }
 
         $event = json_decode($payload, true);
@@ -139,10 +137,10 @@ class WebhookHandler {
         if (!$event) {
             return ['success' => false, 'error' => 'Invalid JSON'];
         }
-        
+
         // Log webhook
         $this->logWebhook('paypal', $event['event_type'], $event['id'], $event);
-        
+
         // Process event
         switch ($event['event_type']) {
             case 'CHECKOUT.ORDER.APPROVED':
@@ -442,6 +440,79 @@ class WebhookHandler {
         return hash_equals($expectedSignature, $signature);
     }
     
+    /**
+     * Verify PayPal webhook signature via PayPal's verify-webhook-signature API.
+     * https://developer.paypal.com/docs/api/webhooks/v1/#verify-webhook-signature
+     */
+    private function verifyPayPalSignature(string $payload, array $headers, string $webhookId): bool {
+        $clientId     = env('PAYPAL_CLIENT_ID', '');
+        $clientSecret = env('PAYPAL_SECRET', '');
+
+        if (empty($clientId) || empty($clientSecret)) {
+            error_log('PayPal credentials not configured — cannot verify webhook signature');
+            return false;
+        }
+
+        $live    = strtolower(env('PAYPAL_MODE', 'sandbox')) === 'live';
+        $baseUrl = $live ? 'https://api.paypal.com' : 'https://api.sandbox.paypal.com';
+
+        // Get access token
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $baseUrl . '/v1/oauth2/token',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_POST           => true,
+            CURLOPT_USERPWD        => $clientId . ':' . $clientSecret,
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            CURLOPT_POSTFIELDS     => 'grant_type=client_credentials',
+        ]);
+        $tokenResponse = curl_exec($ch);
+        curl_close($ch);
+
+        $tokenData    = json_decode($tokenResponse, true);
+        $accessToken  = $tokenData['access_token'] ?? null;
+
+        if (!$accessToken) {
+            error_log('PayPal webhook: failed to obtain access token for signature verification');
+            return false;
+        }
+
+        // Normalise header names to uppercase-with-hyphens (getallheaders() is case-insensitive)
+        $normalised = [];
+        foreach ($headers as $k => $v) {
+            $normalised[strtoupper($k)] = $v;
+        }
+
+        $verifyPayload = [
+            'auth_algo'        => $normalised['PAYPAL-AUTH-ALGO']        ?? '',
+            'cert_url'         => $normalised['PAYPAL-CERT-URL']         ?? '',
+            'transmission_id'  => $normalised['PAYPAL-TRANSMISSION-ID']  ?? '',
+            'transmission_sig' => $normalised['PAYPAL-TRANSMISSION-SIG'] ?? '',
+            'transmission_time'=> $normalised['PAYPAL-TRANSMISSION-TIME'] ?? '',
+            'webhook_id'       => $webhookId,
+            'webhook_event'    => json_decode($payload, true),
+        ];
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $baseUrl . '/v1/notifications/verify-webhook-signature',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_POST           => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $accessToken,
+            ],
+            CURLOPT_POSTFIELDS => json_encode($verifyPayload),
+        ]);
+        $verifyResponse = curl_exec($ch);
+        curl_close($ch);
+
+        $verifyData = json_decode($verifyResponse, true);
+        return ($verifyData['verification_status'] ?? '') === 'SUCCESS';
+    }
+
     /**
      * Log webhook for auditing
      */

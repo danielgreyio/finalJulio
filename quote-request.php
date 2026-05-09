@@ -24,15 +24,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fileError = null;
     if (isset($_FILES['specifications_file']) && $_FILES['specifications_file']['error'] === UPLOAD_ERR_OK) {
         $allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'dwg', 'dxf', 'png', 'jpg', 'jpeg'];
-        $ext = strtolower(pathinfo($_FILES['specifications_file']['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, $allowedExtensions, true)) {
+        $allowedMimeTypes  = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'text/plain',
+            'image/png',
+            'image/jpeg',
+            // DWG/DXF are CAD formats with no universal MIME; validate by extension only
+        ];
+
+        $ext      = strtolower(pathinfo($_FILES['specifications_file']['name'], PATHINFO_EXTENSION));
+        $finfo    = new finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->file($_FILES['specifications_file']['tmp_name']);
+
+        $isDwgDxf    = in_array($ext, ['dwg', 'dxf'], true);
+        $mimeAllowed = in_array($mimeType, $allowedMimeTypes, true);
+        $extAllowed  = in_array($ext, $allowedExtensions, true);
+
+        if (!$extAllowed || (!$mimeAllowed && !$isDwgDxf)) {
             $fileError = 'File type not allowed. Accepted: PDF, DOC, XLS, DWG, DXF, images.';
         } else {
             $upload_dir = 'uploads/specifications/';
             if (!is_dir($upload_dir)) {
                 mkdir($upload_dir, 0755, true);
             }
-            $file_name = uniqid() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+            $file_name   = uniqid() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
             $target_file = $upload_dir . $file_name;
             if (move_uploaded_file($_FILES['specifications_file']['tmp_name'], $target_file)) {
                 $specifications_file = $target_file;

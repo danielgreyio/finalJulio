@@ -62,13 +62,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($stmt->execute([$sanitizedData['email'], $hashedPassword, $sanitizedData['role']])) {
                     $success = 'Account created successfully! You can now log in.';
                     Security::logSecurityEvent('user_registered', ['email' => $sanitizedData['email'], 'role' => $sanitizedData['role']]);
-                    
+
                     // Auto-login the user
                     $userId = $pdo->lastInsertId();
-                    $_SESSION['user_id'] = $userId;
+                    $_SESSION['user_id']    = $userId;
                     $_SESSION['user_email'] = $sanitizedData['email'];
-                    $_SESSION['user_role'] = $sanitizedData['role'];
-                    
+                    $_SESSION['user_role']  = $sanitizedData['role'];
+
+                    // Prevent session fixation after privilege change
+                    session_regenerate_id(true);
+
                     // Redirect based on role
                     if ($sanitizedData['role'] === 'merchant') {
                         header('Location: merchant/dashboard.php');

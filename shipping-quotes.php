@@ -40,4 +40,7 @@ $quotes  = $service->getQuotes([
     'height'             => $height,
 ]);
 
+// Store quotes in session so checkout.php can validate the selected cost server-side
+$_SESSION['shipping_quotes'][$postal] = $quotes;
+
 echo json_encode(['quotes' => $quotes]);

@@ -67,9 +67,8 @@ if ($orderId > 0) {
         }
     }
     
-    // Shipping cost comes from the carrier quote selected by the buyer.
-    // Populated via AJAX call to shipping-quotes.php; default 0 until a quote is chosen.
-    // Server enforces non-negative; full server-side re-validation TODO (store quote in session).
+    // Shipping cost: validate against the server-stored quote from shipping-quotes.php AJAX call.
+    // Falls back to non-negative POST value if no session quote exists (e.g., page refresh).
     $shippingCost = max(0.0, (float) ($_POST['selected_shipping_cost'] ?? 0));
     $taxAmount = $orderTotal * TAX_RATE;
     $orderTotal += $shippingCost + $taxAmount;
@@ -100,6 +99,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         if (!isset($error)) {
+            // Re-validate shipping cost against the session-stored quote from the AJAX call.
+            // If a matching quote exists in the session, use it instead of the POST value.
+            if (isset($_SESSION['shipping_quotes'][$destinationPostal])) {
+                foreach ($_SESSION['shipping_quotes'][$destinationPostal] as $q) {
+                    if ($q['carrier'] === $selectedCarrier && $q['service_code'] === $selectedService) {
+                        // Override POST shipping cost with the authoritative server-stored value
+                        $shippingCost = (float) $q['price'];
+                        $subtotal     = array_sum(array_map(fn($i) => $i['price'] * $i['quantity'], $cartItems));
+                        $taxAmount    = $subtotal * TAX_RATE;
+                        $orderTotal   = $subtotal + $shippingCost + $taxAmount;
+                        break;
+                    }
+                }
+            }
+
             // Check credit limit before creating order
             $creditResult = $creditCheck->checkCreditForOrder($_SESSION['user_id'], $orderTotal);
 

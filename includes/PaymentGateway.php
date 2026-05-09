@@ -36,6 +36,12 @@ class PaymentGateway {
                 throw new Exception("Order is not in a payable state");
             }
 
+            // Re-verify credit is still valid in case it was revoked after order creation
+            $creditStatus = $this->creditCheck->checkCreditForOrder($order['user_id'], $order['total']);
+            if ($creditStatus['credit_applied'] && !$creditStatus['approved']) {
+                throw new Exception("Customer credit is no longer approved for this order");
+            }
+
             $provider = PaymentService::getProvider();
             $result   = $provider->charge($order, $paymentData);
 
@@ -274,29 +280,27 @@ class PaymentGateway {
     }
     
     /**
-     * Create accounts receivable entry with credit information
+     * Create accounts receivable entry with credit information.
+     * Throws on failure so the caller's DB transaction is rolled back.
      */
     private function createAccountsReceivableEntry($orderId, $order) {
-        try {
-            // Check if credit was applied
-            $stmt = $this->pdo->prepare("SELECT id FROM customer_credit_limits WHERE customer_id = ?");
-            $stmt->execute([$order['user_id']]);
-            $creditLimit = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            $creditApplied = !empty($creditLimit);
-            $creditApprovedAmount = $creditApplied ? $order['total'] : 0;
-            
-            // Create accounts receivable entry
-            $this->creditCheck->createAccountsReceivableWithCredit(
-                $orderId, 
-                $order['user_id'], 
-                $order['total'], 
-                $creditApplied, 
-                $creditApprovedAmount
-            );
-        } catch (Exception $e) {
-            // Log error but don't fail the payment
-            error_log("Failed to create accounts receivable entry for order $orderId: " . $e->getMessage());
+        $stmt = $this->pdo->prepare("SELECT id FROM customer_credit_limits WHERE customer_id = ?");
+        $stmt->execute([$order['user_id']]);
+        $creditLimit = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $creditApplied        = !empty($creditLimit);
+        $creditApprovedAmount = $creditApplied ? $order['total'] : 0;
+
+        $result = $this->creditCheck->createAccountsReceivableWithCredit(
+            $orderId,
+            $order['user_id'],
+            $order['total'],
+            $creditApplied,
+            $creditApprovedAmount
+        );
+
+        if (!$result['success']) {
+            throw new Exception("Accounts receivable creation failed for order $orderId: " . ($result['message'] ?? 'unknown error'));
         }
     }
     

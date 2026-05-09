@@ -317,8 +317,12 @@ function cleanupOldData($pdo) {
         'analytics_cache'
     ];
     
+    $allowedTables = array_flip(['product_views', 'search_analytics', 'user_sessions', 'performance_logs', 'analytics_cache']);
     foreach ($tables as $table) {
-        $stmt = $pdo->prepare("DELETE FROM $table WHERE created_at < ?");
+        if (!isset($allowedTables[$table])) {
+            continue;
+        }
+        $stmt = $pdo->prepare("DELETE FROM `$table` WHERE created_at < ?");
         $stmt->execute([$cutoffDate]);
         echo "Cleaned up old data from $table.\n";
     }
