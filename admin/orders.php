@@ -6,6 +6,7 @@ requireRole('admin');
 
 // Handle order actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $action = $_POST['action'] ?? '';
     $orderId = intval($_POST['order_id'] ?? 0);
     
@@ -36,8 +37,9 @@ $search = $_GET['search'] ?? '';
 $status = $_GET['status'] ?? '';
 $dateFrom = $_GET['date_from'] ?? '';
 $dateTo = $_GET['date_to'] ?? '';
-$sortBy = $_GET['sort'] ?? 'created_at';
-$sortOrder = $_GET['order'] ?? 'DESC';
+$allowedSortColumns = ['id', 'created_at', 'total', 'status', 'customer_id'];
+$sortBy = in_array($_GET['sort'] ?? '', $allowedSortColumns) ? $_GET['sort'] : 'created_at';
+$sortOrder = strtoupper($_GET['order'] ?? '') === 'ASC' ? 'ASC' : 'DESC';
 
 $whereConditions = ['1=1'];
 $params = [];

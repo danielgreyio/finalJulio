@@ -149,8 +149,8 @@ class PaymentGateway {
         
         $grossAmount = $order['total'];
         $commissionRate = 0.05; // 5% commission
-        $commissionAmount = $grossAmount * $commissionRate;
-        $merchantNetAmount = $grossAmount - $commissionAmount;
+        $commissionAmount = $netAmount * $commissionRate;
+        $merchantNetAmount = $netAmount - $commissionAmount;
         
         $stmt->execute([
             $orderId,
@@ -200,6 +200,9 @@ class PaymentGateway {
             }
 
             $refundAmount = $amount ?? $transaction['amount'];
+            if ($refundAmount > $transaction['amount']) {
+                throw new Exception("Refund amount cannot exceed original transaction amount");
+            }
             $gatewayRef   = $transaction['gateway_reference'];
             $method       = $transaction['payment_method'];
 

@@ -1,16 +1,10 @@
 <?php
 require_once '../config/database.php';
+requireRole('admin');
 
 // Get report parameters
 $reportType = $_GET['type'] ?? 'location';
 $locationId = $_GET['location'] ?? '';
-
-try {
-    $pdo = new PDO("mysql:host=localhost;dbname=finalJulio;charset=utf8", 'root', '');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
-}
 
 // Report titles and descriptions
 $reportInfo = [

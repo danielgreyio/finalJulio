@@ -374,13 +374,14 @@ try {
                 const end = new Date(task.end);
                 const durationDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
                 
+                const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
                 document.getElementById('taskDetailsContent').innerHTML = `
                     <div class="space-y-4">
                         <div>
-                            <h4 class="text-lg font-semibold text-gray-900">${task.name}</h4>
-                            <p class="text-gray-600 mt-1">Engineering Task #${task.id}</p>
+                            <h4 class="text-lg font-semibold text-gray-900">${esc(task.name)}</h4>
+                            <p class="text-gray-600 mt-1">Engineering Task #${esc(task.id)}</p>
                         </div>
-                        
+
                         <div class="bg-gray-50 rounded-lg p-4">
                             <div class="flex justify-between mb-2">
                                 <span class="text-sm text-gray-600">Progress</span>
@@ -390,30 +391,30 @@ try {
                                 <div class="bg-blue-600 h-2 rounded-full" style="width: ${task.progress}%"></div>
                             </div>
                         </div>
-                        
+
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <p class="text-sm text-gray-600">Start Date</p>
-                                <p class="font-medium">${startDate}</p>
+                                <p class="font-medium">${esc(startDate)}</p>
                             </div>
                             <div>
                                 <p class="text-sm text-gray-600">End Date</p>
-                                <p class="font-medium">${endDate}</p>
+                                <p class="font-medium">${esc(endDate)}</p>
                             </div>
                             <div>
                                 <p class="text-sm text-gray-600">Duration</p>
-                                <p class="font-medium">${durationDays} days</p>
+                                <p class="font-medium">${esc(durationDays)} days</p>
                             </div>
                             <div>
                                 <p class="text-sm text-gray-600">Status</p>
-                                <p class="font-medium capitalize">${task.custom_class.replace('-task', '').replace('-', ' ')}</p>
+                                <p class="font-medium capitalize">${esc(task.custom_class.replace('-task', '').replace('-', ' '))}</p>
                             </div>
                         </div>
-                        
+
                         <div>
                             <p class="text-sm text-gray-600">Assigned Engineer</p>
-                            <p class="font-medium"><span class="${engineerTagClass}"><i class="fas fa-user mr-1"></i>${task.engineer_email}</span></p>
-                            <p class="text-sm text-gray-500 mt-1">Engineer ID: ${task.engineer_id}</p>
+                            <p class="font-medium"><span class="${esc(engineerTagClass)}"><i class="fas fa-user mr-1"></i>${esc(task.engineer_email)}</span></p>
+                            <p class="text-sm text-gray-500 mt-1">Engineer ID: ${esc(task.engineer_id)}</p>
                         </div>
                         
                         <div>

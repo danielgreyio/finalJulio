@@ -6,6 +6,7 @@ requireRole('admin');
 
 // Handle user actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $action = $_POST['action'] ?? '';
     $userId = intval($_POST['user_id'] ?? 0);
     
@@ -39,8 +40,9 @@ $offset = ($page - 1) * $perPage;
 
 $search = $_GET['search'] ?? '';
 $role = $_GET['role'] ?? '';
-$sortBy = $_GET['sort'] ?? 'created_at';
-$sortOrder = $_GET['order'] ?? 'DESC';
+$allowedSortColumns = ['id', 'email', 'role', 'created_at', 'status'];
+$sortBy = in_array($_GET['sort'] ?? '', $allowedSortColumns) ? $_GET['sort'] : 'created_at';
+$sortOrder = strtoupper($_GET['order'] ?? '') === 'ASC' ? 'ASC' : 'DESC';
 
 $whereConditions = ['1=1'];
 $params = [];

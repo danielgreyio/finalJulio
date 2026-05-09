@@ -1082,14 +1082,29 @@ class VentDepotAPI {
     private function updateOrder($orderId) {
         $input = json_decode(file_get_contents('php://input'), true);
         $status = $input['status'] ?? '';
-        
-        if (!$status) {
-            return $this->response(['error' => 'Status is required'], 400);
+
+        $allowedStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+        if (!$status || !in_array($status, $allowedStatuses, true)) {
+            return $this->response(['error' => 'Invalid or missing status'], 400);
         }
-        
+
+        // Verify ownership — only the order's customer or an admin may update
+        $ownerStmt = $this->pdo->prepare("SELECT user_id FROM orders WHERE id = ?");
+        $ownerStmt->execute([$orderId]);
+        $order = $ownerStmt->fetch();
+
+        if (!$order) {
+            return $this->response(['error' => 'Order not found'], 404);
+        }
+
+        $isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+        if (!$isAdmin && $order['user_id'] !== $this->userId) {
+            return $this->response(['error' => 'Access denied'], 403);
+        }
+
         $stmt = $this->pdo->prepare("UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?");
         $stmt->execute([$status, $orderId]);
-        
+
         return $this->response([
             'success' => true,
             'message' => 'Order status updated successfully'

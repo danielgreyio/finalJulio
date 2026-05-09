@@ -47,7 +47,8 @@ $offset = ($page - 1) * $perPage;
 
 $search = $_GET['search'] ?? '';
 $status = $_GET['status'] ?? '';
-$sortBy = $_GET['sort'] ?? 'created_at';
+$allowedSortColumns = ['id', 'email', 'username', 'created_at', 'status'];
+$sortBy = in_array($_GET['sort'] ?? '', $allowedSortColumns) ? $_GET['sort'] : 'created_at';
 
 $whereConditions = ["role = 'merchant'"];
 $params = [];

@@ -25,8 +25,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Get database name
             $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn();
             
-            // Create backup command
-            $command = "mysqldump --host=localhost --user=root --password= --single-transaction --routines --triggers $dbName > $filepath";
+            // Create backup command — credentials from environment, never hardcoded
+            $dbHost = env('DB_HOST', 'localhost');
+            $dbUser = env('DB_USER', 'root');
+            $dbPass = env('DB_PASS', '');
+            $command = sprintf(
+                'mysqldump --host=%s --user=%s %s --single-transaction --routines --triggers %s > %s',
+                escapeshellarg($dbHost),
+                escapeshellarg($dbUser),
+                !empty($dbPass) ? '--password=' . escapeshellarg($dbPass) : '',
+                escapeshellarg($dbName),
+                escapeshellarg($filepath)
+            );
             
             // Execute backup (Note: This is a simplified version - in production you'd want better error handling)
             exec($command, $output, $returnCode);

@@ -1,6 +1,6 @@
 <?php
-// Admin Homepage Manager
-// This would typically include authentication checks
+require_once '../config/database.php';
+requireRole('admin');
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -69,7 +69,8 @@ if ($orderId > 0) {
     
     // Shipping cost comes from the carrier quote selected by the buyer.
     // Populated via AJAX call to shipping-quotes.php; default 0 until a quote is chosen.
-    $shippingCost = (float) ($_POST['selected_shipping_cost'] ?? 0);
+    // Server enforces non-negative; full server-side re-validation TODO (store quote in session).
+    $shippingCost = max(0.0, (float) ($_POST['selected_shipping_cost'] ?? 0));
     $taxAmount = $orderTotal * TAX_RATE;
     $orderTotal += $shippingCost + $taxAmount;
 }
@@ -149,20 +150,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if ($creditResult['credit_applied']) {
                     $reserveResult = $creditCheck->reserveCreditForOrder($_SESSION['user_id'], $orderTotal);
                     if (!$reserveResult['success']) {
-                         // Warning: Credit reservation failed but order created. 
-                         // In production, we should log this critical error.
+                        error_log("Credit reservation failed for user {$_SESSION['user_id']} order $orderId");
                     }
                 }
-                
+
+                $pdo->commit();
+
                 // Clear cart
                 unset($_SESSION['cart']);
-                
+
                 // Redirect to checkout with order ID
                 header("Location: checkout.php?order_id=$orderId");
                 exit;
-                
-            } else {
-                $error = "Failed to create order: " . $result['error'];
+
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = "Failed to create order: " . $e->getMessage();
             }
             } // end else (credit approved)
         } // end if (!isset($error))

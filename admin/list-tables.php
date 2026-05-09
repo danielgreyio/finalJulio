@@ -1,5 +1,6 @@
 <?php
-require_once 'config/database.php';
+require_once '../config/database.php';
+requireRole('admin');
 
 echo "Listing all tables...\n\n";
 

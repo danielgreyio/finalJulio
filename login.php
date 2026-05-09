@@ -36,11 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $isValid = false;
         
         if ($code) {
-            // Verify TOTP code
-            // $isValid = $twoFA->verifyUserCode($pendingUserId, $code);
+            $isValid = $twoFA->verifyUserCode($pendingUserId, $code);
         } elseif ($backupCode) {
-            // Verify backup code
-            // $isValid = $twoFA->verifyBackupCode($pendingUserId, $backupCode);
+            $isValid = $twoFA->verifyBackupCode($pendingUserId, $backupCode);
         }
         
         if ($isValid) {
@@ -90,89 +88,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } else {
         // Regular login process
-        // RATE LIMITING DISABLED COMPLETELY
-        
-        // Sanitize input
-        $email = Security::sanitizeInput($_POST['email'] ?? '', 'email');
-        $password = $_POST['password'] ?? '';
-        
-        // Validation
-        $rules = [
-            'email' => ['required' => true, 'type' => 'email'],
-            'password' => ['required' => true, 'min_length' => 1]
-        ];
-        
-        $errors = Security::validateInput(['email' => $email, 'password' => $password], $rules);
-        
-        if (!empty($errors)) {
-            $error = implode(' ', $errors);
+        if (!Security::checkRateLimit('login', 5, 900)) {
+            $error = 'Too many login attempts. Please try again in 15 minutes.';
+            Security::logSecurityEvent('rate_limit_exceeded', [
+                'ip' => Security::getClientIP()
+            ], 'warning');
         } else {
-            // Check user credentials
-            $stmt = $pdo->prepare("SELECT id, email, password, role FROM users WHERE email = ?");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
-            
-            // DEBUG LOGGING
-            $logMsg = date('[Y-m-d H:i:s] ') . "Login attempt for: $email. User found: " . ($user ? 'Yes' : 'No') . ". ";
-            if ($user) {
-                $verify = password_verify($password, $user['password']);
-                $logMsg .= "Password verify: " . ($verify ? 'Pass' : 'FAIL') . ". Hash: " . substr($user['password'], 0, 10) . "...";
-            }
-            file_put_contents('login_debug.txt', $logMsg . "\n", FILE_APPEND);
-            
-            if ($user && Security::verifyPassword($password, $user['password'])) {
-                // Login successful without 2FA
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_email'] = $user['email'];
-                $_SESSION['user_role'] = $user['role'];
-                
+            // Sanitize input
+            $email = Security::sanitizeInput($_POST['email'] ?? '', 'email');
+            $password = $_POST['password'] ?? '';
+
+            // Validation
+            $rules = [
+                'email'    => ['required' => true, 'type' => 'email'],
+                'password' => ['required' => true, 'min_length' => 1]
+            ];
+
+            $errors = Security::validateInput(['email' => $email, 'password' => $password], $rules);
+
+            if (!empty($errors)) {
+                $error = implode(' ', $errors);
+            } else {
+                // Check user credentials
+                $stmt = $pdo->prepare("SELECT id, email, password, role FROM users WHERE email = ?");
+                $stmt->execute([$email]);
+                $user = $stmt->fetch();
+
                 if ($user && Security::verifyPassword($password, $user['password'])) {
                     // Check if 2FA is enabled
                     if ($twoFA->isEnabled($user['id'])) {
-                        // Check if device is trusted
-                        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-                        $ipAddress = Security::getClientIP();
+                        $userAgent  = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                        $ipAddress  = Security::getClientIP();
 
                         if ($twoFA->isTrustedDevice($user['id'], $userAgent, $ipAddress)) {
-                            // Skip 2FA for trusted device
-                            $_SESSION['user_id'] = $user['id'];
+                            $_SESSION['user_id']    = $user['id'];
                             $_SESSION['user_email'] = $user['email'];
-                            $_SESSION['user_role'] = $user['role'];
+                            $_SESSION['user_role']  = $user['role'];
 
                             session_regenerate_id(true);
 
                             Security::logSecurityEvent('user_login_success_trusted_device', [
                                 'user_id' => $user['id'],
-                                'email' => $user['email'],
-                                'role' => $user['role']
+                                'email'   => $user['email'],
+                                'role'    => $user['role']
                             ]);
 
                             $redirect = Security::validateRedirect($redirect);
                             header("Location: $redirect");
                             exit;
                         } else {
-                            // Require 2FA verification
                             $_SESSION['pending_2fa_user_id'] = $user['id'];
-                            $show2FAForm = true;
+                            $show2FAForm  = true;
                             $pendingUserId = $user['id'];
 
                             Security::logSecurityEvent('2fa_required', [
                                 'user_id' => $user['id'],
-                                'email' => $user['email']
+                                'email'   => $user['email']
                             ]);
                         }
                     } else {
-                        // Login successful without 2FA
-                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['user_id']    = $user['id'];
                         $_SESSION['user_email'] = $user['email'];
-                        $_SESSION['user_role'] = $user['role'];
+                        $_SESSION['user_role']  = $user['role'];
 
                         session_regenerate_id(true);
 
                         Security::logSecurityEvent('user_login_success', [
                             'user_id' => $user['id'],
-                            'email' => $user['email'],
-                            'role' => $user['role']
+                            'email'   => $user['email'],
+                            'role'    => $user['role']
                         ]);
 
                         $redirect = Security::validateRedirect($redirect);
@@ -183,18 +167,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = 'Invalid email or password.';
                     Security::logSecurityEvent('login_failed', [
                         'attempted_email' => $email,
-                        'ip' => Security::getClientIP()
+                        'ip'              => Security::getClientIP()
                     ], 'warning');
                 }
-                
-                header("Location: $redirect");
-                exit;
-            } else {
-                $error = 'Invalid email or password.';
-                Security::logSecurityEvent('login_failed', [
-                    'attempted_email' => $email,
-                    'ip' => Security::getClientIP()
-                ], 'warning');
             }
         }
     }
