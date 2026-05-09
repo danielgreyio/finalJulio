@@ -155,6 +155,37 @@ Comprehensive security pass across the entire codebase.
 
 ---
 
+### Security Audit & Remediation (`81c64ec`, `b2e0258`)
+
+A three-track automated audit was run across the full codebase after the merge, covering authentication/session management, SQL injection/XSS/input validation, and business logic/payment integrity. **30 issues found — all 30 fixed.**
+
+| Severity | Count |
+|----------|-------|
+| Critical | 13 |
+| High | 9 |
+| Medium | 8 |
+| Low | 3 (informational) |
+
+**Notable fixes:**
+
+| File | Issue fixed |
+|------|-------------|
+| `login.php` | Rate limiting was disabled; 2FA verification was commented out; 2FA bypass via unconditional redirect |
+| `admin/users.php`, `merchants.php`, `orders.php` | SQL injection via unvalidated `ORDER BY` sort parameters |
+| `admin/list-tables.php`, `homepage-manager.php` | Completely unauthenticated admin pages |
+| `admin/inventory-report.php` | Hardcoded `root`/blank DB credentials |
+| `api/index.php` | IDOR — any user could `PUT {"status":"paid"}` on any order |
+| `checkout.php` | Shipping cost accepted from POST without server validation; `try/else` parse error made all order creation fail silently; missing `$pdo->commit()` |
+| `includes/PaymentGateway.php` | Refund not bounded to original amount; commission calculated on wrong amount; AR failure swallowed silently |
+| `webhooks/payment-webhook.php` | PayPal webhook processed without signature verification |
+| `register.php` | Session fixation on auto-login after registration |
+| `quote-request.php` | File upload: extension-only check, no MIME type validation |
+| `gantt-view.php` | XSS via `innerHTML` with unescaped DB-sourced values |
+
+Full details in `docs/SECURITY_AUDIT.md`.
+
+---
+
 ## 3. Architecture Overview
 
 ```
@@ -194,7 +225,7 @@ Browser
   ├── admin/                    ← Admin panel (60+ pages)
   ├── merchant/                 ← Merchant portal
   ├── webhooks/                 ← Payment/shipping provider callbacks
-  ├── migrations/               ← 11 numbered SQL migrations (run in order)
+  ├── migrations/               ← 12 numbered SQL migrations (run in order)
   └── tests/                    ← PHPUnit test suite
 ```
 
@@ -216,9 +247,11 @@ Browser
 │   ├── payments/           Payment provider classes
 │   └── shipping/           Shipping provider classes
 ├── merchant/               Merchant portal
-├── migrations/             SQL migration files (001–011)
+├── migrations/             SQL migration files (001–012)
 ├── tests/                  PHPUnit tests
 ├── webhooks/               Payment/shipping webhooks
+├── docs/
+│   └── SECURITY_AUDIT.md   Full security audit report with all 30 findings
 ├── .env.example            Environment variable template ← START HERE
 ├── .htaccess               Apache security rules, CSP/HSTS headers
 ├── deploy.sh               Deployment script (Linux/macOS)
@@ -230,21 +263,22 @@ Browser
 
 ## 5. Database & Migrations
 
-11 numbered migrations must be run **in order** on a fresh database:
+12 numbered migrations must be run **in order** on a fresh database:
 
-| File | What it creates |
-|------|----------------|
-| `001_initial_schema.sql` | users, addresses, categories, products, orders, reviews, merchant_applications, shipping |
-| `002_homepage_components.sql` | CMS banners, featured products, hero sections |
-| `003_fixed_marketplace_schema.sql` | marketplace transactions, disputes, payments, commissions, escrow |
-| `004_engineering_task_management.sql` | Internal engineering dashboard tables |
-| `005_user_profiles.sql` | Extended user profile fields |
-| `006_chat_system.sql` | Conversation/message tables |
-| `007_two_factor_trusted_devices.sql` | 2FA tokens and trusted device storage |
-| `008_orders_shipping_columns.sql` | `carrier`, `shipping_service`, `tracking_number` on orders |
-| `009_construction_setup.sql` | 7 construction categories, `unit_of_measure` on products, `product_pricing_tiers` table |
-| `010_password_reset_tokens.sql` | Password reset token storage with expiry |
-| `011_add_orders_subtotal.sql` | `subtotal` column on orders |
+| # | File | What it creates |
+|---|------|----------------|
+| 001 | `001_initial_schema.sql` | users, addresses, categories, products, orders, reviews, merchant_applications, shipping |
+| 002 | `002_homepage_components.sql` | CMS banners, featured products, hero sections |
+| 003 | `003_fixed_marketplace_schema.sql` | marketplace transactions, disputes, payments, commissions, escrow |
+| 004 | `004_engineering_task_management.sql` | Internal engineering dashboard tables |
+| 005 | `005_user_profiles.sql` | Extended user profile fields |
+| 006 | `006_chat_system.sql` | Conversation/message tables |
+| 007 | `007_two_factor_trusted_devices.sql` | 2FA tokens and trusted device storage |
+| 008 | `008_orders_shipping_columns.sql` | `carrier`, `shipping_service`, `tracking_number` on orders |
+| 009 | `009_construction_setup.sql` | 7 construction categories, `unit_of_measure` on products, `product_pricing_tiers` table |
+| 010 | `010_password_reset_tokens.sql` | Password reset token storage with expiry |
+| 011 | `011_add_orders_subtotal.sql` | `subtotal` column on orders |
+| 012 | `012_add_orders_tax_amount.sql` | `tax_amount` column on orders |
 
 **Optional migrations** (run only if those features are needed):
 - `add_currency_support.sql`
@@ -296,15 +330,28 @@ See `CARRIERS.md` for credential setup.
 All of the following are active:
 
 - **CSRF** — every non-GET form request validated. Token auto-injected by `navigation.php`.
-- **Sessions** — HttpOnly, Secure, SameSite=Strict, strict mode, 1-hour lifetime.
+- **Sessions** — HttpOnly, Secure, SameSite=Strict, strict mode, 1-hour lifetime. Session regenerated on login and registration to prevent fixation.
+- **Rate limiting** — login (5 attempts / 15 min), registration (5 / hr), applied per IP.
+- **2FA** — TOTP-based with trusted device support (migration 007). Verification is enforced — bypassing by submitting a blank code is not possible.
 - **Password reset** — rate-limited, hashed token, 1-hour expiry. See `forgot-password.php`.
-- **2FA** — TOTP-based, with trusted device support (migration 007).
 - **Open redirect** — whitelist only. `Security::validateRedirect()` blocks all external redirects.
-- **Image upload** — MIME type validated server-side, not from filename extension.
+- **SQL injection** — all `ORDER BY` sort parameters in admin pages validated against an explicit column whitelist.
+- **IDOR** — order update API verifies ownership before allowing status changes.
+- **Image upload** — MIME type validated server-side via `finfo_file()`, not from filename extension.
+- **File upload (quote)** — MIME type checked via `finfo_file()` plus extension whitelist.
 - **Stock atomicity** — `SELECT ... FOR UPDATE` prevents race conditions on checkout.
+- **Shipping cost** — validated server-side against session-stored carrier quote from AJAX call; not trusted from POST.
+- **Refunds** — bounded to original transaction amount; cannot exceed what was charged.
+- **Commission** — calculated on actual net payment amount after gateway fees, not DB order total.
+- **Accounts receivable** — AR creation failure rolls back the payment transaction; no silent accounting gaps.
+- **Webhook signatures** — Stripe signatures verified via HMAC; PayPal signatures verified via `/v1/notifications/verify-webhook-signature` API.
+- **Backup credentials** — `mysqldump` reads `DB_USERNAME`/`DB_PASSWORD` from env; args passed through `escapeshellarg()`.
+- **Admin access** — all admin pages require `requireRole('admin')`.
 - **ENCRYPTION_KEY** — must be ≥ 32 chars. App throws on startup if weak or missing.
 - **JWT_SECRET** — throws if unset. No default fallback.
 - **`.htaccess`** — blocks `.env`, `.git`, sensitive directories; sets CSP, HSTS, X-Frame-Options.
+
+See `docs/SECURITY_AUDIT.md` for the full 30-issue audit report.
 
 ---
 
@@ -441,16 +488,17 @@ composer install
 
 ### Blocking (must fix before go-live)
 
-- [ ] **`.env` on production server** — nothing runs without it. Get real API keys for Estafeta, Stripe (or chosen provider), SMTP.
-- [ ] **Run all 11 migrations on the production DB** — verify each one completes cleanly.
+- [ ] **`.env` on production server** — nothing runs without it. Get real API keys for Estafeta, Stripe (or chosen provider), SMTP, and `PAYPAL_WEBHOOK_ID`.
+- [ ] **Run all 12 migrations on the production DB** — verify each one completes cleanly.
 - [ ] **End-to-end checkout test** — add product → cart → address → shipping quote → payment (sandbox) → order confirmation email. This path touches `OrderProcessor`, `PaymentGateway`, `ShippingService`, and `Mailer` together.
 - [ ] **Admin user creation** — no admin account exists on a fresh install. Run the SQL above or add a proper seeder.
+- [ ] **Set `APP_ENV=production`** — demo credentials block on login page is gated by this. Set it before go-live.
 
 ### Important (should fix before go-live)
 
 - [ ] **Product images / storage** — image uploads go to the path in `STORAGE_ROOT`. This directory must exist on the server and Apache must be configured to serve it. Storefront will look broken without real product images.
 - [ ] **Composer install on server** — `vendor/` is not in the repo. `composer install --no-dev` must be run on the server.
-- [ ] **Verify webhooks** — Stripe/PayPal/MercadoPago webhooks are in `/webhooks/`. Each provider's dashboard must be configured to point to `https://yourdomain.com/webhooks/stripe.php` etc. OXXO payments (MercadoPago) are async and only complete via webhook.
+- [ ] **Wire up webhooks** — each payment provider's dashboard must be configured to post to `https://yourdomain.com/webhooks/payment-webhook.php?gateway=stripe` (and `?gateway=paypal`). PayPal also requires `PAYPAL_WEBHOOK_ID` from the developer dashboard to enable signature verification. OXXO payments are async and only complete via webhook.
 - [ ] **HTTPS** — `.htaccess` sets HSTS. Server must have TLS configured (Let's Encrypt via SETUP.md) before going live.
 - [ ] **Optional migrations** — decide which of the 5 optional schema files apply and run them: `cms_frontend_schema.sql` is likely required for the CMS admin to work.
 
@@ -459,4 +507,4 @@ composer install
 - [ ] **Seed data** — `includes/dummy_data.php` exists but has no CLI entry point. Wrap it in a runnable script.
 - [ ] **Cron jobs** — `analytics-cron.php` and escrow cron need to be registered (see `SETUP.md`).
 - [ ] **Redis** — optional but the accounting dashboard uses it for caching. Fine to skip initially.
-- [ ] **Rate limiting on API endpoints** — currently only on login/register. Cart and shipping-quotes endpoints are unprotected.
+- [ ] **Rate limiting on API endpoints** — currently only on login/register. Cart and shipping-quotes endpoints have no rate limiting.

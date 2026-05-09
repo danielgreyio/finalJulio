@@ -199,7 +199,10 @@ for f in migrations/001_initial_schema.sql \
           migrations/006_chat_system.sql \
           migrations/007_two_factor_trusted_devices.sql \
           migrations/008_orders_shipping_columns.sql \
-          migrations/009_construction_setup.sql; do
+          migrations/009_construction_setup.sql \
+          migrations/010_password_reset_tokens.sql \
+          migrations/011_add_orders_subtotal.sql \
+          migrations/012_add_orders_tax_amount.sql; do
     echo "Running $f..."
     mysql -u ventdepot_user -p'StrongPasswordHere' -h 127.0.0.1 ventdepot < "$f"
 done

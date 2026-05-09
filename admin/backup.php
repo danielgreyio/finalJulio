@@ -27,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Create backup command — credentials from environment, never hardcoded
             $dbHost = env('DB_HOST', 'localhost');
-            $dbUser = env('DB_USER', 'root');
-            $dbPass = env('DB_PASS', '');
+            $dbUser = env('DB_USERNAME', 'root');
+            $dbPass = env('DB_PASSWORD', '');
             $command = sprintf(
                 'mysqldump --host=%s --user=%s %s --single-transaction --routines --triggers %s > %s',
                 escapeshellarg($dbHost),

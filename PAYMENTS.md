@@ -69,6 +69,29 @@ PAYPAL_MODE=sandbox
 
 ---
 
+## PayPal Webhook Signature Verification
+
+VentDepot verifies PayPal webhook signatures before processing any event. This requires one additional credential:
+
+**Key in `.env`:**
+```
+PAYPAL_WEBHOOK_ID=your_paypal_webhook_id
+```
+
+**How to get it:**
+1. Log into the [PayPal Developer Dashboard](https://developer.paypal.com)
+2. Go to **My Apps & Credentials** → select your app
+3. Scroll to **Webhooks** → click **Add Webhook**
+4. Set the URL to `https://yourdomain.com/webhooks/payment-webhook.php?gateway=paypal`
+5. Subscribe to at least: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.DENIED`
+6. After saving, copy the **Webhook ID** shown on the webhook detail page into `PAYPAL_WEBHOOK_ID`
+
+If `PAYPAL_WEBHOOK_ID` is empty, incoming PayPal webhooks are acknowledged (HTTP 200) but not processed. If it is set but the signature fails, the request is rejected with HTTP 401 and logged as a security event.
+
+Sandbox webhooks can be simulated from the PayPal developer dashboard under **Webhooks → Simulate**.
+
+---
+
 ## Updating Mercado Pago Credentials
 
 **Keys in `.env`:**
