@@ -2,6 +2,7 @@
 require_once 'config/database.php';
 require_once 'includes/PaymentGateway.php';
 require_once 'includes/CreditCheck.php';
+require_once 'includes/OrderProcessor.php';
 require_once 'includes/shipping/ShippingService.php';
 
 // Check if user is logged in

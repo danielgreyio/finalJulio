@@ -43,22 +43,16 @@ class PaymentGateway {
             $activeMethod = strtolower(env('PAYMENT_PROVIDER', $paymentMethod));
 
             if ($result['success']) {
-                // Record payment transaction
-                $transactionId = $this->recordTransaction($orderId, $activeMethod, $result);
-                
                 // Check if this is a mock payment
-                $isMock = false;
-                if (isset($result['raw_response'])) {
-                    $raw = json_decode($result['raw_response'], true);
-                    if (isset($raw['mock']) && $raw['mock'] === true) {
-                        $isMock = true;
-                        $transactionId = 123456; // Dummy Transaction ID
-                    }
-                }
+                $isMock = isset($result['raw_response'])
+                    && ($raw = json_decode($result['raw_response'], true))
+                    && isset($raw['mock']) && $raw['mock'] === true;
 
-                if (!$isMock) {
-                    // Record payment transaction
-                    $transactionId = $this->recordTransaction($orderId, $paymentMethod, $result);
+                if ($isMock) {
+                    $transactionId = 123456; // Dummy Transaction ID
+                } else {
+                    // Record payment transaction (real payments only, once)
+                    $transactionId = $this->recordTransaction($orderId, $activeMethod, $result);
                     
                     // Update order status
                     $this->updateOrderStatus($orderId, 'paid', $transactionId);
